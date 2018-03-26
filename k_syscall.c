@@ -57,8 +57,7 @@ DWORD k_debug_get(DWORD* ebx)
 
 void k_putc866(char ch)
 {
-    char in[2] = {ch,0}, out[4];
-    k_iconv_cp866_to_utf8(in, 2, out, 4);
+    char out[4]; k_strncpy((BYTE*)out,3,(BYTE*)&ch,0,1);
     fputs(out, stderr);
 }
 

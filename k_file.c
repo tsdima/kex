@@ -109,7 +109,7 @@ int is_key(BYTE** p)
 
 char* k_parse_name(k_context* ctx, BYTE* name, int cp, char* buf, char* ebuf)
 {
-    int len; if(cp==0 && *name>0 && *name<4) cp = *name++;
+    if(cp==0 && *name>0 && *name<4) cp = *name++;
     if(*name=='/')
     {
         name += cp==2?2:1;
@@ -125,20 +125,7 @@ char* k_parse_name(k_context* ctx, BYTE* name, int cp, char* buf, char* ebuf)
         buf = k_parse_name(ctx, ctx==NULL?(BYTE*)"/rd/1/":ctx->curpath, cp, buf, ebuf);
     }
     if (buf[-1]!='/') *buf++='/';
-    switch(cp)
-    {
-    case 0: case 1:
-        len = strlen((char*)name)+1;
-        k_iconv_cp866_to_utf8((char*)name, len, buf, ebuf-buf);
-        break;
-    case 2:
-        for(len=0; ((WORD*)name)[len]; ++len);
-        k_iconv_utf16_to_utf8((char*)name, len*2, buf, ebuf-buf);
-        break;
-    case 3:
-        strncpy(buf, (char*)name, ebuf-buf); ebuf[-1]=0;
-        break;
-    }
+    if(k_strsize(name,cp,3)<=ebuf-buf) k_strcpy((BYTE*)buf,3,name,cp); else *buf = 0;
     while(*buf)
     {
         char* p = strchr(buf,'/'),sv; if(!p) p = strchr(buf,0);

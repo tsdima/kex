@@ -5,9 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <iconv.h>
-
-iconv_t k_mem_cd_cp866,k_mem_cd_utf16;
 
 BYTE* font9bmp = NULL; DWORD font9len = 0;
 BYTE* font16bmp = NULL; DWORD font16len = 0;
@@ -23,9 +20,6 @@ void* load_file(char* name, DWORD* plen)
 
 void k_iconv_init()
 {
-    k_mem_cd_cp866 = iconv_open("UTF-8", "CP866");
-    k_mem_cd_utf16 = iconv_open("UTF-8", "UTF-16LE");
-
     char name[1024],*p; strcpy(name, k_root); p = strchr(name,0);
     strcpy(p, "../char.mt"); font9bmp = load_file(name, &font9len);
     strcpy(p, "../charUni.mt"); font16bmp = load_file(name, &font16len);
@@ -86,26 +80,22 @@ DWORD ic_put_utf16le(BYTE* p, DWORD ch)
 static DWORD (*ic_get[])(BYTE**) = {ic_get_cp866, ic_get_cp866, ic_get_utf16le, ic_get_utf8};
 static DWORD (*ic_put[])(BYTE*,DWORD) = {ic_put_cp866, ic_put_cp866, ic_put_utf16le, ic_put_utf8};
 
-int k_strlen(BYTE* p, int cp)
+DWORD k_strlen(BYTE* src, int src_cp)
 {
-    int len; if(cp<0) cp = *p++;
-    DWORD (*get)(BYTE**) = ic_get[cp&3];
-    for(len=0; get(&p); ++len);
+    DWORD len; if(src_cp<0) src_cp = *src==0||*src>3 ? 0 : *src++;
+    DWORD (*get)(BYTE**) = ic_get[src_cp&3];
+    for(len=0; get(&src); ++len);
     return len;
 }
 
-BYTE* k_strdup(BYTE* src, int src_cp, int dst_cp)
+DWORD k_strsize(BYTE* src, int src_cp, int dst_cp)
 {
     DWORD ch,size=0; if(src_cp<0) src_cp = *src==0||*src>3 ? 0 : *src++;
     DWORD (*get)(BYTE**) = ic_get[src_cp&3];
     DWORD (*put)(BYTE*,DWORD) = ic_put[(dst_cp<0?src_cp:dst_cp)&3];
-    BYTE *q=src,*dst,tmp[8];
-    for(ch=1;ch;) size += put(tmp, ch=get(&q));
+    BYTE tmp[8]; for(ch=1;ch;) size += put(tmp, ch=get(&src));
     if(dst_cp<0 && src_cp>0) ++size;
-    BYTE* np = dst = malloc(size);
-    if(dst_cp<0 && src_cp>0) *dst++ = src_cp;
-    for(ch=1,q=src;ch;) dst += put(dst, ch=get(&q));
-    return np;
+    return size;
 }
 
 BYTE* k_strncpy(BYTE* dst, int dst_cp, BYTE* src, int src_cp, DWORD maxlen)
@@ -123,12 +113,9 @@ BYTE* k_strcpy(BYTE* dst, int dst_cp, BYTE* src, int src_cp)
     return k_strncpy(dst,dst_cp,src,src_cp,-1);
 }
 
-void k_iconv_cp866_to_utf8(char* ip, size_t ilen, char* op, size_t olen)
+BYTE* k_strdup(BYTE* src, int src_cp, int dst_cp)
 {
-    iconv(k_mem_cd_cp866, &ip, &ilen, &op, &olen);
-}
-
-void k_iconv_utf16_to_utf8(char* ip, size_t ilen, char* op, size_t olen)
-{
-    iconv(k_mem_cd_utf16, &ip, &ilen, &op, &olen);
+    BYTE* dst = malloc(k_strsize(src,src_cp,dst_cp));
+    k_strncpy(dst,dst_cp,src,src_cp,-1);
+    return dst;
 }
