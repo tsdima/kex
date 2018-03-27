@@ -14,7 +14,7 @@ If you have installed [CodeLite][2] simply open project file and build it. Or en
 
 # How to use kex
 
-Make sure you have followed files in your home folder:
+Make sure you have placed followed files in your home folder:
 
  - ~/.kex/[char.mt][3]
  - ~/.kex/[charUni.mt][4]
