@@ -21,6 +21,17 @@
 int fdlist[MAX_CHILD],fcount,appcount=0;
 int winpos[MAX_CHILD];
 
+k_bitmap_font font9 = {6,9};
+k_bitmap_font font16 = {8,16};
+
+void load_bitmap_font(char* name, k_bitmap_font* bf)
+{
+    FILE* fp = fopen(name, "rb"); if(fp==NULL) return;
+    fseek(fp, 0, SEEK_END); DWORD len = ftell(fp); fseek(fp, 0, SEEK_SET);
+    bf->bmp = malloc(len); fread(bf->bmp, 1, len, fp); fclose(fp);
+    bf->chars = len/bf->height;
+}
+
 int find_free(int* list, int max)
 {
     int i; for(i=1; i<max; ++i) if(list[i]<=0) return i;
@@ -148,6 +159,10 @@ int main(int argc, char **argv)
 
     sprintf(k_root, "%s/.kex/root/", getenv("HOME")); base_pid = getpid();
 
+    char* p = strchr(k_root,0);
+    strcpy(p, "../char.mt"); load_bitmap_font(k_root, &font9);
+    strcpy(p, "../charUni.mt"); load_bitmap_font(k_root, &font16); *p = 0;
+
     struct sockaddr_un saddr; socklen_t addrlen;
     fd_set set; msg_t msg;
 
@@ -171,7 +186,6 @@ int main(int argc, char **argv)
     listen(svr, 5); fdlist[0] = svr; fcount=svr+1;
 
     k_kernel_mem_init();
-    k_iconv_init();
 
     DWORD width,height;
     k_get_screen_size(&width, &height);

@@ -1,29 +1,7 @@
 #include "k_mem.h"
-#include "k_file.h"
 #include "k_iconv.h"
 
-#include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
-
-BYTE* font9bmp = NULL; DWORD font9len = 0;
-BYTE* font16bmp = NULL; DWORD font16len = 0;
-
-void* load_file(char* name, DWORD* plen)
-{
-    FILE* fp = fopen(name, "rb"); if(fp==NULL) return NULL;
-    fseek(fp, 0, SEEK_END); DWORD len = ftell(fp); fseek(fp, 0, SEEK_SET);
-    void* data = malloc(len); fread(data, 1, len, fp); fclose(fp);
-    if(plen) *plen = len;
-    return data;
-}
-
-void k_iconv_init()
-{
-    char name[1024],*p; strcpy(name, k_root); p = strchr(name,0);
-    strcpy(p, "../char.mt"); font9bmp = load_file(name, &font9len);
-    strcpy(p, "../charUni.mt"); font16bmp = load_file(name, &font16len);
-}
 
 DWORD ic_get_cp866(BYTE** p)
 {

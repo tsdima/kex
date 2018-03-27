@@ -13,9 +13,8 @@
 
 #define window_style ((ctx->window_color>>24)&15)
 
-Display* display; Window win;
-GlyphSet font9,font16;
-Picture picture,textline;
+Display* display; Window win; Picture picture;
+GlyphSet gsfont[2][8];
 
 K_SKIN_PARAMS skin_params;
 K_SKIN_BUTTON skin_button_minimize;
@@ -79,26 +78,10 @@ void SetNoBorder()
     if(!set) XSetTransientForHint(display, win, RootWindow(display, 0));
 }
 
-GlyphSet k_load_font(BYTE* p, int width, int height, int num)
-{
-    int i,y; BYTE bmp[16][4]; XGlyphInfo info = {.width = width, .height = height, .x = 0, .y = 0, .xOff = width, .yOff = 0};
-    GlyphSet font = XRenderCreateGlyphSet(display, XRenderFindStandardFormat(display, PictStandardA1));
-    for(i=0; i<num; ++i)
-    {
-        Glyph id=i; for(y=0; y<height; ++y,++p) bmp[y][0] = *p;
-        XRenderAddGlyphs(display, font, &id, &info, 1, (char*)*bmp, height*4);
-    }
-    return font;
-}
-
 void k_gui_init()
 {
     display = XOpenDisplay(NULL);
-
     if (DefaultDepth(display, 0) < 24) k_panic("Cannot work in non true color mode");
-
-    font9 = k_load_font(font9bmp, 6, 9, font9len/9);
-    font16 = k_load_font(font16bmp, 8, 16, font16len>>4);
 }
 
 void k_pixmap_setimage(kpixmap* pm, BYTE* image, int width, int height)
@@ -252,59 +235,134 @@ Picture xr_create_pen(DWORD color)
     return p;
 }
 
-void k_draw_text_intern(k_context* ctx, int x, int y, BYTE* text, int len, int fillbg, int cp, int buf, int scale, DWORD color, DWORD extra)
+void k_pixel8(BYTE* p, int mode, DWORD color)
 {
-    if(text==NULL) return;
-    int fw = cp==0?6:8, fh = cp==0?9:16, maxlen = (ctx->window_w-x)/fw;
-    if(len<0||len>512) len = k_strlen(text, cp);
-    if(len>maxlen) len = maxlen; if(len<=0) return;
-    Picture tmp = buf||scale ? textline : picture; XRenderColor bgcolor = {0,0,0,0};
-    int tx = tmp==textline?0:x, ty = tmp==textline?0:y, sx = len*(scale+1)*fw, sy = (scale+1)*fh;
-    if(fillbg||buf||scale)
+    *p = mode==0 ? 0xFF : 0x3F;
+}
+
+void k_pixel32(BYTE* p, int mode, DWORD color)
+{
+    if(mode==0)
     {
-        if(fillbg && !buf) bgcolor = xr_convert_color(extra);
-        XRenderFillRectangle(display, PictOpSrc, tmp, &bgcolor, tx,ty, sx,sy);
-    }
-    Picture fg_pen = xr_create_pen(color);
-    if(cp==0)
-    {
-        XRenderCompositeString8(display, PictOpOver, fg_pen, tmp, NULL, font9, 0,0, tx,ty, (char*)text, len);
+        *(DWORD*)p = color;
     }
     else
     {
-        WORD wbuf[512]; if(len>511) len=511; k_strncpy((BYTE*)wbuf, 2, text, cp, len);
-        XRenderCompositeString16(display, PictOpOver, fg_pen, tmp, NULL, font16, 0,0, tx,ty, wbuf, len);
+        *p = (*p>>2)*3+((color>>2)&0x3F); ++p;
+        *p = (*p>>2)*3+((color>>10)&0x3F); ++p;
+        *p = (*p>>2)*3+((color>>18)&0x3F);
     }
-    XRenderFreePicture(display, fg_pen);
-    if(tmp == textline)
+}
+
+void k_prepare_char(BYTE* ch, int width, int height, BYTE* buf, DWORD stride, DWORD s, void(*putpix)(BYTE*,int,DWORD), DWORD color, DWORD pixsz)
+{
+    DWORD x,y,w,h,b0,b1,b2; BYTE map[16][8],*d; memset(*map,0,sizeof(map));
+    for(y=0; y<height; ++y,++ch)
     {
-        XTransform xform = {{
-            {0x10000,0,0},
-            {0,0x10000,0},
-            {0,0,0x10000*(scale+1)}
-        }};
-        XRenderSetPictureTransform(display, tmp, &xform);
-        if(buf)
+        b0 = y==0?0:ch[-1]<<1; b1 = ch[0]<<5; b2 = ch[1]<<9;
+        for(x=0; x<width; ++x,b0>>=1,b1>>=1,b2>>=1)
         {
-            Pixmap pm = XCreatePixmap(display, RootWindow(display, 0), sx, sy, 32);
-            Picture p = XRenderCreatePicture(display, pm, XRenderFindStandardFormat(display, PictStandardARGB32), 0, 0);
-            XRenderFillRectangle(display, PictOpSrc, p, &bgcolor, 0,0, sx, sy);
-            XRenderComposite(display, PictOpOver, tmp, 0, p, 0,0, 0,0, 0,0, sx,sy);
-            XImage* xim = XGetImage(display, pm, 0, 0, sx, sy, AllPlanes, XYPixmap);
-            DWORD* data = user_pd(extra), width = *data++, height = *data++, *d;
-            if(sx>width) sx = width; if(sy>height) sy = height;
-            x -= ctx->client_x; y -= ctx->client_y;
-            for(ty = 0; ty < sy; ++ty) for(d = data+(y+ty)*width+x, tx = 0; tx < sx; ++tx,++d)
+            w = (b2&0x700)|(b1&0x70)|(b0&7);
+            if((w&0x670)==0x240 || (w&0x770)==0x350 || w==0x640) map[y][x] |= 1;
+            if((w&0x370)==0x210 || (w&0x770)==0x650 || w==0x310) map[y][x] |= 2;
+            if((w&0x076)==0x042 || (w&0x077)==0x053 || w==0x046) map[y][x] |= 4;
+            if((w&0x073)==0x012 || (w&0x077)==0x056 || w==0x013) map[y][x] |= 8;
+            if((w&0x770)==0x250) map[y][x] |= 3;
+            if((w&0x077)==0x052) map[y][x] |= 12;
+            if(w&0x20) map[y][x] = 0x10;
+        }
+    }
+    if(s==1)
+    {
+        for(y=0; y<height; ++y) for(x=0,d=buf+y*stride; x<width; ++x,d+=pixsz)
+        {
+            char m = map[y][x];
+            if((m&0x10)!=0) putpix(d,0,color); else
+            if((m&0x0F)!=0) putpix(d,1,color);
+        }
+    }
+    else
+    {
+        for(y=0; y<height; ++y) for(x=0; x<width; ++x)
+        {
+            char m = map[y][x];
+            for(h=0; h<s; ++h) for(w=0,d=buf+(y*s+h)*stride+x*s*pixsz; w<s; ++w,d+=pixsz)
             {
-                unsigned long xpixel = XGetPixel(xim, tx, ty);
-                if(xpixel!=0) *d = xpixel;
+                if(((m&1)!=0 && w>s-h-1) ||
+                    ((m&2)!=0 && w<h) ||
+                    ((m&4)!=0 && w>h) ||
+                    ((m&8)!=0 && w<s-h-1) ||
+                    ((m&0x10)!=0)) putpix(d,0,color);
             }
-            XFree(xim); XRenderFreePicture(display, p); XFreePixmap(display, pm);
+        }
+    }
+}
+
+GlyphSet xr_get_font(k_bitmap_font* bf, int scale)
+{
+    int size = bf->height==9 ? 0 : 1;
+    if(gsfont[size][scale]==0)
+    {
+        Glyph i; BYTE* ch; DWORD s=scale+1,stride = ((bf->width*s-1)|3)+1;
+        XGlyphInfo info = {.width = bf->width*s, .height = bf->height*s, .x = 0, .y = 0, .xOff = bf->width*s, .yOff = 0};
+        GlyphSet font = XRenderCreateGlyphSet(display, XRenderFindStandardFormat(display, PictStandardA8));
+        for(i=0,ch=bf->bmp; i<bf->chars; ++i,ch+=bf->height)
+        {
+            static BYTE buf[16*8*8*8]; memset(buf,0,bf->height*s*stride);
+            k_prepare_char(ch, bf->width, bf->height, buf, stride, s, k_pixel8, 0, 1);
+            XRenderAddGlyphs(display, font, &i, &info, 1, (char*)buf, bf->height*s*stride);
+        }
+        gsfont[size][scale] = font;
+    }
+    return gsfont[size][scale];
+}
+
+void k_draw_text_intern(k_context* ctx, int x, int y, BYTE* text, int len, int fillbg, int cp, int buf, int scale, DWORD color, DWORD extra)
+{
+    if(text==NULL) return; k_bitmap_font* bf = cp==0 ? &font9 : &font16;
+    if(len<0||len>512) len = k_strlen(text, cp);
+    if(buf)
+    {
+        x -= ctx->client_x; y -= ctx->client_y;
+        DWORD* data = user_pd(extra), width=*data++, height=*data++;
+        int maxlen = (width-x)/bf->width,i;
+        if(len>maxlen) len = maxlen; if(len<=0) return;
+        if(y+bf->height>height) return;
+        if(cp==0)
+        {
+            for(i=0; i<len; ++i)
+                k_prepare_char(bf->bmp+text[i]*bf->height, bf->width, bf->height,
+                    (BYTE*)(data+y*width+x+i*bf->width*(scale+1)), width*4, scale+1, k_pixel32, color, 4);
         }
         else
         {
-            XRenderComposite(display, PictOpOver, tmp, 0, picture, 0,0, 0,0, x,y, sx,sy);
+            WORD wbuf[512]; if(len>511) len=511; k_strncpy((BYTE*)wbuf, 2, text, cp, len);
+            for(i=0; i<len; ++i)
+                k_prepare_char(bf->bmp+wbuf[i]*bf->height, bf->width, bf->height,
+                    (BYTE*)(data+y*width+x+i*bf->width*(scale+1)), width*4, scale+1, k_pixel32, color, 4);
         }
+    }
+    else
+    {
+        int maxlen = (ctx->window_w-x)/bf->width;
+        if(len>maxlen) len = maxlen; if(len<=0) return;
+        int sx = len*(scale+1)*bf->width, sy = (scale+1)*bf->height;
+        if(fillbg)
+        {
+            XRenderColor bgcolor = xr_convert_color(extra);
+            XRenderFillRectangle(display, PictOpSrc, picture, &bgcolor, x,y, sx,sy);
+        }
+        Picture fg_pen = xr_create_pen(color);
+        if(cp==0)
+        {
+            XRenderCompositeString8(display, PictOpOver, fg_pen, picture, NULL, xr_get_font(bf,scale), 0,0, x,y, (char*)text, len);
+        }
+        else
+        {
+            WORD wbuf[512]; if(len>511) len=511; k_strncpy((BYTE*)wbuf, 2, text, cp, len);
+            XRenderCompositeString16(display, PictOpOver, fg_pen, picture, NULL, xr_get_font(bf,scale), 0,0, x,y, wbuf, len);
+        }
+        XRenderFreePicture(display, fg_pen);
     }
 }
 
@@ -669,8 +727,6 @@ void k_window(k_context* ctx, int x, int y, DWORD width, DWORD height, DWORD col
 
     if (win==0)
     {
-        DWORD sx,sy,sw,sh;
-
         ctx->window_x = 0; ctx->window_y = 0; ctx->window_w = 1; ctx->window_h = 1;
 
         if((window_style==3 || window_style==4) && (color&0x10000000)!=0 && titleaddr!=0)
@@ -685,8 +741,6 @@ void k_window(k_context* ctx, int x, int y, DWORD width, DWORD height, DWORD col
         XGrabKey(display, AnyKey, AnyModifier, win, True, GrabModeAsync, GrabModeAsync);
         XSelectInput(display, win, ExposureMask|KeyPressMask|KeyReleaseMask|ButtonPressMask|ButtonReleaseMask|PointerMotionMask|StructureNotifyMask|FocusChangeMask);
         picture = XRenderCreatePicture(display, win, XRenderFindStandardFormat(display, PictStandardRGB24), 0, 0);
-        k_get_screen_size(&sw, &sh); textline = xr_create_picture(sw, 16, 0);
-        //XRenderSetPictureFilter(display, textline, FilterBilinear, 0, 0);
 
         if(window_style<=1)
         {
@@ -696,6 +750,7 @@ void k_window(k_context* ctx, int x, int y, DWORD width, DWORD height, DWORD col
 
         if(window_style!=1)
         {
+            DWORD sx,sy,sw,sh;
             k_get_desktop_rect(&sx, &sy, &sw, &sh);
             if(x<sx) x = sx; if(y<sy) y = sy;
             if(x+width>=sw) x = sw-width-1;

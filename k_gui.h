@@ -52,6 +52,16 @@ typedef struct
 } K_SKIN_BITMAP;
 #pragma pack(pop)
 
+typedef struct
+{
+    BYTE width;
+    BYTE height;
+    WORD chars;
+    BYTE* bmp;
+} k_bitmap_font;
+
+extern k_bitmap_font font9,font16;
+
 void k_gui_init();
 void k_process_event(k_context* ctx);
 void k_move_mouse(int x, int y);
