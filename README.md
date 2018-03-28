@@ -2,7 +2,9 @@
 
 This project let you run [Kolibri OS][1] programms on your Linux host without installing Kolibri OS.
 
-# How to compile
+----------
+How to compile
+----
 
 First of all you will need to install liblzma-dev:
 
@@ -10,9 +12,11 @@ First of all you will need to install liblzma-dev:
 
 If you have installed [CodeLite][2] simply open project file and build it. Or enter followed command in terminal window:
 
-    gcc -o kex main.c k_*.c -lX11 -lrt -llzma -D_GNU_SOURCE
+    gcc -o kex main.c k_*.c -lX11 -lXrender -lrt -llzma -D_GNU_SOURCE
 
-# How to use kex
+----------
+How to use kex
+----
 
 Make sure you have placed followed files in your home folder:
 
