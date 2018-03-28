@@ -523,6 +523,9 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 default: err = 1; break;
                 }
                 break;
+            case 73:
+                k_blit_image(ctx, *ebx, *ecx);
+                break;
             case 80:
                 err = k_file_syscall(ctx, eax, ebx, 1);
                 break;

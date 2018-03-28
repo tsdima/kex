@@ -949,3 +949,14 @@ void k_draw_image(k_context* ctx, int x, int y, DWORD width, DWORD height, BYTE*
     XPutImage(display, win, DefaultGC(display, 0), ximg, 0,0, x,y, width,height);
     XDestroyImage(ximg);
 }
+
+void k_blit_image(k_context* ctx, DWORD rop, DWORD param)
+{
+    K_BLIT_PARAM* bp = user_mem(param);
+    BYTE* data = user_mem(bp->src_addr);
+    LONG x = bp->dst_x, y = bp->dst_y;
+    DWORD w = bp->src_w<bp->dst_w ? bp->src_w : bp->dst_w;
+    DWORD h = bp->src_h<bp->dst_h ? bp->src_h : bp->dst_h;
+    if((rop&(1<<29))==0) { x-= ctx->client_x; y-= ctx->client_y; };
+    k_draw_image(ctx,x,y,w,h,data+bp->src_y*bp->src_stride+bp->src_x*4,32,bp->src_stride-w*4,0);
+}

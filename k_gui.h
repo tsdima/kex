@@ -50,6 +50,20 @@ typedef struct
     DWORD height;
     BYTE data[1];
 } K_SKIN_BITMAP;
+
+typedef struct
+{
+    LONG  dst_x;
+    LONG  dst_y;
+    DWORD dst_w;
+    DWORD dst_h;
+    LONG  src_x;
+    LONG  src_y;
+    DWORD src_w;
+    DWORD src_h;
+    DWORD src_addr;
+    DWORD src_stride;
+} K_BLIT_PARAM;
 #pragma pack(pop)
 
 typedef struct
@@ -77,6 +91,7 @@ void k_draw_line(k_context* ctx, int x1, int y1, int x2, int y2, DWORD color);
 void k_draw_text(k_context* ctx, int x, int y, BYTE* text, int len, DWORD color, DWORD extra);
 void k_draw_num(k_context* ctx, int x, int y, DWORD color, DWORD options, void* pnum, DWORD extra);
 void k_draw_image(k_context* ctx, int x, int y, DWORD width, DWORD height, BYTE* img, DWORD bpp, DWORD pitch, DWORD* pal32);
+void k_blit_image(k_context* ctx, DWORD rop, DWORD param);
 void k_get_screen_size(DWORD* width, DWORD* height);
 void k_get_desktop_rect(DWORD* left, DWORD* top, DWORD* right, DWORD* bottom);
 void k_set_desktop_rect(WORD left, WORD top, WORD right, WORD bottom);
