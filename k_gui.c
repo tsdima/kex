@@ -153,8 +153,16 @@ void k_get_client_rect(k_context* ctx, DWORD* x, DWORD* y, DWORD* w, DWORD* h)
 
 void k_get_screen_size(DWORD* width, DWORD* height)
 {
-    *width = 1920; //DisplayWidth(display,0);
-    *height = 1080; //DisplayHeight(display,0);
+#ifdef SCREEN_WIDTH
+    *width = SCREEN_WIDTH;
+#else
+    *width = DisplayWidth(display,0);
+#endif
+#ifdef SCREEN_HEIGHT
+    *height = SCREEN_HEIGHT;
+#else
+    *height = DisplayHeight(display,0);
+#endif
 }
 
 void k_get_desktop_rect(DWORD* left, DWORD* top, DWORD* right, DWORD* bottom)

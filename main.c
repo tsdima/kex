@@ -188,6 +188,7 @@ int main(int argc, char **argv)
     k_kernel_mem_init();
 
     DWORD width,height;
+    k_gui_init();
     k_get_screen_size(&width, &height);
     k_set_desktop_rect(0, 0, width-1, height-1);
 
