@@ -169,7 +169,7 @@ void set_time(k_time* t, time_t* from)
     t->reserved = 0;
     t->day = ft->tm_mday;
     t->mon = ft->tm_mon+1;
-    t->year = ft->tm_year;
+    t->year = ft->tm_year+1900;
 }
 
 int get_stat(char* fname, k_folder_item_base* f)
@@ -291,7 +291,7 @@ time_t convert_time(k_time* from)
     st.tm_hour = from->hour;
     st.tm_mday = from->day;
     st.tm_mon = from->mon-1;
-    st.tm_year = from->year;
+    st.tm_year = from->year-1900;
     return mktime(&st);
 }
 
