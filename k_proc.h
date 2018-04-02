@@ -69,6 +69,6 @@ typedef struct
 void k_proc_init();
 void k_exec(k_context* ctx, char* kexfile, char* args);
 void k_start_thread(DWORD eip, DWORD esp);
-void* k_load(char* fname, void*(*_mem_alloc)(DWORD), DWORD* exports, DWORD* psize);
-DWORD k_load_file(k_context* ctx, BYTE* file, int cp, DWORD* psize);
-DWORD k_load_dll(k_context* ctx, BYTE* file, int cp);
+void* k_load(k_context* ctx, BYTE* name, int cp, void*(*_mem_alloc)(DWORD), DWORD* exports, DWORD* psize);
+DWORD k_load_file(k_context* ctx, BYTE* name, int cp, DWORD* psize);
+DWORD k_load_dll(k_context* ctx, BYTE* name, int cp);

@@ -69,23 +69,6 @@ typedef struct
 
 char k_root[1024];
 
-int is83char(char c)
-{
-    return c>0x20 && c<0x80;
-}
-
-void toupper83(char* p)
-{
-    int i=0,imax=8; char* s;
-    for(s=p;*s;++s)
-    {
-        if(!is83char(*s)) return;
-        ++i; if(*s=='.' && imax==8) { i=0; imax=3; }
-        if(i>imax) return;
-    }
-    for(;*p;++p) *p = toupper(*p);
-}
-
 int is_dev_name(BYTE* name)
 {
     int i;
@@ -107,31 +90,59 @@ int is_key(BYTE** p)
     return 0;
 }
 
-char* k_parse_name(k_context* ctx, BYTE* name, int cp, char* buf, char* ebuf)
+char* k_parse_item(k_context* ctx, BYTE* name, int cp, char* buf, char* ebuf)
 {
-    if(cp==0 && *name>0 && *name<4) cp = *name++;
     if(*name=='/')
     {
         name += cp==2?2:1;
         switch(is_key(&name))
         {
-        case 1: buf = k_parse_name(ctx, (BYTE*)"/rd/1/", cp, buf, ebuf); break;
-        case 2: buf = k_parse_name(ctx, (BYTE*)kernel_mem()->extfs_path, cp, buf, ebuf); break;
+        case 1: buf = k_parse_item(ctx, (BYTE*)"/RD/1/", cp, buf, ebuf); break;
+        case 2: buf = k_parse_item(ctx, (BYTE*)kernel_mem()->extfs_path, cp, buf, ebuf); break;
         default: strcpy(buf, k_root); buf = strchr(buf,0); break;
         }
     }
     else
     {
-        buf = k_parse_name(ctx, ctx==NULL?(BYTE*)"/rd/1/":ctx->curpath, cp, buf, ebuf);
+        buf = k_parse_item(ctx, ctx==NULL?(BYTE*)"/RD/1/":ctx->curpath, cp, buf, ebuf);
     }
     if (buf[-1]!='/') *buf++='/';
     if(k_strsize(name,cp,3)<=ebuf-buf) k_strcpy((BYTE*)buf,3,name,cp); else *buf = 0;
-    while(*buf)
+    return strchr(buf,0);
+}
+
+void k_check_exists(char* fname)
+{
+    if(access(fname,F_OK)==0) return;
+    char* p = strchr(fname,0);
+    if(p==fname) return; else --p;
+    while(p!=fname && *p!='/') --p;
+    if(p==fname) return; else *p = 0;
+    k_check_exists(fname);
+    if(p[1]!=0)
     {
-        char* p = strchr(buf,'/'),sv; if(!p) p = strchr(buf,0);
-        sv = *p; *p = 0; toupper83(buf); *p = sv; buf = sv ? p+1 : p;
+        struct dirent* e; DIR* d = opendir(fname);
+        if(d!=NULL)
+        {
+            while((e=readdir(d))!=NULL)
+            {
+                if(strcasecmp(p+1, e->d_name)==0)
+                {
+                    strcpy(p+1, e->d_name);
+                    break;
+                }
+            }
+            closedir(d);
+        }
     }
-    return buf;
+    *p = '/';
+}
+
+void k_parse_name(k_context* ctx, BYTE* name, int cp, char* buf, int buflen)
+{
+    if(cp==0 && *name>0 && *name<4) cp = *name++;
+    k_parse_item(ctx, name, cp, buf, buf+buflen);
+    k_check_exists(buf);
 }
 
 DWORD k_path_len(BYTE* path, int cp)
@@ -345,7 +356,7 @@ DWORD k_file_syscall(k_context* ctx, DWORD* eax, DWORD* ebx, int f80)
         name = fcb->name[0]!=0 ? fcb->name : user_pb(*(DWORD*)(fcb->name+1));
     }
     if(cp==0 && *name>0 && *name<4) cp = *name++;
-    k_parse_name(ctx, name, cp, fname, fname+sizeof(fname));
+    k_parse_name(ctx, name, cp, fname, sizeof(fname));
     switch(fcb->func)
     {
     case 0: *eax = k_read_file(fname, fcb, ebx); break;
@@ -398,7 +409,7 @@ DWORD k_set_extfs(BYTE* data)
 DWORD k_load_skin(k_context* ctx, BYTE* name)
 {
     char fname[1024]; msg_t msg;
-    k_parse_name(ctx, name, 0, fname, fname+sizeof(fname));
+    k_parse_name(ctx, name, 0, fname, sizeof(fname));
     msg_load_skin(&msg, fname);
     write_msg(ipc_server, &msg);
     //for(ctx->retcode = 0; ctx->retcode==0;) k_process_ipc_event(ctx, &msg);

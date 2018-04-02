@@ -1,6 +1,6 @@
 extern char k_root[];
 
-char* k_parse_name(k_context* ctx, BYTE* name, int cp, char* buf, char* ebuf);
+void k_parse_name(k_context* ctx, BYTE* name, int cp, char* buf, int buflen);
 DWORD k_file_syscall(k_context* ctx, DWORD* eax, DWORD* ebx, int f80);
 
 void k_copy_path(BYTE* to, BYTE* from);

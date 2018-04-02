@@ -144,7 +144,7 @@ void remove_from_window_stack(int slot)
 
 void do_load_skin(msg_t* msg)
 {
-    k_load(msg->u.run.buf,k_skin_alloc,NULL,NULL);
+    k_load(NULL,(BYTE*)msg->u.run.buf,0,k_skin_alloc,NULL,NULL);
     int i; msg_load_skin(msg,NULL);
     for(i=1; i<MAX_CHILD && fdlist[i]; ++i) if(fdlist[i]>0) write_msg(fdlist[i], msg);
 }
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
     k_get_screen_size(&width, &height);
     k_set_desktop_rect(0, 0, width-1, height-1);
 
-    k_load("DEFAULT.SKN",k_skin_alloc,NULL,NULL);
+    k_load(NULL,(BYTE*)"DEFAULT.SKN",0,k_skin_alloc,NULL,NULL);
 
     do_run(&msg, 0); if(appcount==0) return 0;
 

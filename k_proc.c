@@ -121,15 +121,15 @@ void* k_malloc_wrap(DWORD size)
     return malloc(size);
 }
 
-void* k_load(char* fname, void*(*_mem_alloc)(DWORD), DWORD* exports, DWORD* psize)
+void* k_load(k_context* ctx, BYTE* name, int cp, void*(*_mem_alloc)(DWORD), DWORD* exports, DWORD* psize)
 {
     void* mem = NULL; if(_mem_alloc == NULL) _mem_alloc = k_malloc_wrap;
 
-    FILE* fp = fopen(fname, "rb");
+    FILE* fp = fopen((char*)name, "rb");
     if(fp == NULL)
     {
-        char name[512]; k_parse_name(NULL, (BYTE*)fname, 0, name, name+sizeof(name));
-        fp = fopen(name, "rb");
+        char fname[512]; k_parse_name(ctx, name, cp, fname, sizeof(fname));
+        fp = fopen(fname, "rb");
     }
     if(fp != NULL)
     {
@@ -191,37 +191,35 @@ void* k_load(char* fname, void*(*_mem_alloc)(DWORD), DWORD* exports, DWORD* psiz
     }
     else
     {
-        fprintf(stderr, "%s not found\n", fname);
+        fprintf(stderr, "%s not found\n", name);
     }
 
     return mem;
 }
 
-DWORD k_load_file(k_context* ctx, BYTE* file, int cp, DWORD* psize)
+DWORD k_load_file(k_context* ctx, BYTE* name, int cp, DWORD* psize)
 {
-    DWORD exports = 0; char name[512]; BYTE* mem;
-    k_parse_name(ctx, file, cp, name, name+512); if(psize) *psize = 0;
-    mem = k_load(name, k_mem_alloc_from_heap, &exports, psize);
+    DWORD exports = 0; BYTE* mem; if(psize) *psize = 0;
+    mem = k_load(ctx, name, cp, k_mem_alloc_from_heap, &exports, psize);
     return mem ? mem - user_pb(0) : 0;
 }
 
-DWORD k_load_dll(k_context* ctx, BYTE* file, int cp)
+DWORD k_load_dll(k_context* ctx, BYTE* name, int cp)
 {
-    DWORD exports = 0; char name[512];
-    k_parse_name(ctx, file, cp, name, name+512);
-    k_load(name, k_mem_alloc_from_heap, &exports, NULL);
+    DWORD exports = 0;
+    k_load(ctx, name, cp, k_mem_alloc_from_heap, &exports, NULL);
     return exports;
 }
 
 void k_exec(k_context* ctx, char* kexfile, char* args)
 {
-    KEX_FILE_HDR* hdr = (KEX_FILE_HDR*)k_load(kexfile, k_mem_alloc, NULL, NULL);
+    KEX_FILE_HDR* hdr = (KEX_FILE_HDR*)k_load(ctx, (BYTE*)kexfile, 0, k_mem_alloc, NULL, NULL);
     ctx->memsize = k_mem_get_size();
 
     if(hdr != NULL && memcmp(hdr->magic,"MENUET0",7) == 0)
     {
         DWORD esp = hdr->u.menuet.ram_size;
-        if (hdr->magic[7]=='1')
+        if (hdr->magic[7]!='0')
         {
             esp = hdr->u.menuet.stack_pos;
             if(hdr->u.menuet.path_buf!=0)
