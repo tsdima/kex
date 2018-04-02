@@ -379,6 +379,7 @@ DWORD k_heap_realloc(DWORD addr, DWORD size)
     if (size>0 && size<oldsize)
     {
         DWORD pages = ((size-1)>>12)+1;
+        if(pages==oldpages) return addr;
         k_heap_mark(HTAG_NONE, map, 0);
         k_heap_mark(HTAG_NORMAL, map, pages);
         k_heap_mark(HTAG_FREE, map+pages, oldpages-pages);
