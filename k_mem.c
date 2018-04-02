@@ -374,13 +374,25 @@ DWORD k_heap_realloc(DWORD addr, DWORD size)
     if (size==0 || addr >= k_base_size) return 0;
     BYTE* map = k_heap_map + (addr>>12);
     if ((*map&HTAG_NORMAL)==0) return 0;
-    DWORD oldsize = k_heap_get_pcount(map)<<12;
-    k_heap_free(addr);
-    DWORD newaddr = k_heap_alloc_noclear(size);
-    if (newaddr==0) return 0;
-    if (newaddr==addr) return addr;
-    memmove(k_base+newaddr, k_base+addr, size<oldsize ? size : oldsize);
-    return newaddr;
+    DWORD oldpages = k_heap_get_pcount(map);
+    DWORD oldsize = oldpages<<12;
+    if (size>0 && size<oldsize)
+    {
+        DWORD pages = ((size-1)>>12)+1;
+        k_heap_mark(HTAG_NONE, map, 0);
+        k_heap_mark(HTAG_NORMAL, map, pages);
+        k_heap_mark(HTAG_FREE, map+pages, oldpages-pages);
+        return addr;
+    }
+    else
+    {
+        k_heap_free(addr); if(size==0) return 0;
+        DWORD newaddr = k_heap_alloc_noclear(size);
+        if (newaddr==0) return 0;
+        if (newaddr==addr) return addr;
+        memmove(k_base+newaddr, k_base+addr, size<oldsize ? size : oldsize);
+        return newaddr;
+    }
 }
 
 #define USM_READ  0
