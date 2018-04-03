@@ -377,6 +377,8 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 5: *eax = k_get_keyboard_lang(); break;
                 case 9: clock_gettime(CLOCK_MONOTONIC, &now); *eax = now.tv_sec*100+now.tv_nsec/10000000; break;
                 case 10: clock_gettime(CLOCK_MONOTONIC, &now); q = now.tv_sec*1000000000L+now.tv_nsec; *edx=q>>32; *eax=q; break;
+                case 11: *eax = 0; break; // no lowlevel HD access
+                case 12: *eax = 0; break; // no PCI access
                 default: err = 1; break;
                 }
                 break;
@@ -460,6 +462,13 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 {
                 case 1: k_get_screen_size(&x,&y); *eax=(x<<16)+y; break;
                 default: err = 1; break;
+                }
+                break;
+            case 62:
+                switch(*ebx&255)
+                {
+                case 0: *eax = 0x100; break;
+                default: *eax = -1; break; // no PCI bus
                 }
                 break;
             case 63:
