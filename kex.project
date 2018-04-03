@@ -17,6 +17,7 @@
     <File Name="k_file.c"/>
     <File Name="k_ipc.c"/>
     <File Name="k_iconv.c"/>
+    <File Name="k_net.c"/>
   </VirtualDirectory>
   <VirtualDirectory Name="include">
     <File Name="k_mem.h"/>
@@ -27,6 +28,7 @@
     <File Name="k_file.h"/>
     <File Name="k_ipc.h"/>
     <File Name="k_iconv.h"/>
+    <File Name="k_net.h"/>
   </VirtualDirectory>
   <Dependencies Name="Debug"/>
   <Dependencies Name="Release"/>

@@ -5,6 +5,7 @@
 #include "k_gui.h"
 #include "k_file.h"
 #include "k_ipc.h"
+#include "k_net.h"
 #include "k_syscall.h"
 
 #include <stdio.h>
@@ -534,6 +535,15 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 break;
             case 73:
                 k_blit_image(ctx, *ebx, *ecx);
+                break;
+            case 74:
+                *eax = k_net_info(ctx, *ebx>>8, *ebx, ebx, ecx);
+                break;
+            case 75:
+                *eax = k_net_socket(ctx, *ebx, ebx, *ecx, *edx, *esi, *edi);
+                break;
+            case 76:
+                *eax = k_net_proto(ctx, *ebx>>16, *ebx>>8, *ebx, ebx, ecx);
                 break;
             case 80:
                 err = k_file_syscall(ctx, eax, ebx, 1);

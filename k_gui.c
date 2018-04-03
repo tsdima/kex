@@ -616,14 +616,19 @@ void k_process_event(k_context* ctx)
 
     if(XPending(display) == 0)
     {
-        int xfd = ConnectionNumber(display),fdcnt = (xfd>ipc_server ? xfd : ipc_server)+1;
+        int i,xfd = ConnectionNumber(display),fdcnt = (xfd>ipc_server ? xfd : ipc_server)+1;
         fd_set fds; msg_t msg; struct timeval tv; tv.tv_sec = 0; tv.tv_usec = 1000;
         for(;;)
         {
             FD_ZERO(&fds); FD_SET(xfd, &fds); FD_SET(ipc_server, &fds);
+            for(i=0; i<MAX_SOCKET; ++i) if(ctx->sockets[i])
+            {
+                FD_SET(ctx->sockets[i], &fds); if(ctx->sockets[i]>=fdcnt) fdcnt = ctx->sockets[i]+1;
+            }
             if(select(fdcnt, &fds, NULL, NULL, &tv)<=0) return;
             if(FD_ISSET(ipc_server, &fds)) k_process_ipc_event(ctx, &msg); else break;
         }
+        if(!FD_ISSET(xfd, &fds)) k_event_network(ctx);
     }
 
     while(XPending(display) != 0)
@@ -880,25 +885,23 @@ void k_draw_text(k_context* ctx, int x, int y, BYTE* text, int len, DWORD color,
     k_draw_text_intern(ctx,x,y,text,color>>31?-1:len,(color>>30)&1,(color>>28)&3,(color>>27)&1,(color>>24)&7,color,extra);
 }
 
-char* k_itoa(int n, char* buf, int radix, int width, int trim)
+BYTE* k_itoa(QWORD n, BYTE* buf, DWORD radix, DWORD width, DWORD trim)
 {
     static char digit[] = "0123456789ABCDEF";
-    int sign = n<0; if(sign) n=-n;
     *buf = digit[n%radix];
     while((n>=radix||trim==0) && --width>0)
     {
         n /= radix; *--buf = digit[n%radix];
     }
-    if(sign) *--buf = '-';
     return buf;
 }
 
 void k_draw_num(k_context* ctx, int x, int y, DWORD color, DWORD options, void* pnum, DWORD extra)
 {
-    static char bases[] = {10,16,2,8}; char buf[63]; buf[63]=0;
-    int width = (options>>16)&63, radix = bases[(options>>8)&3];
-    char* num = k_itoa(*(int*)pnum,buf+62,radix,width,(options>>31)&1);
-    k_draw_text(ctx,x,y,(BYTE*)num,-1,color,extra);
+    static char bases[] = {10,16,2,8}; BYTE buf[63]; buf[63]=0;
+    DWORD width = (options>>16)&63, radix = bases[(options>>8)&3];
+    BYTE* num = k_itoa((options>>30)&1?*(QWORD*)pnum:*(DWORD*)pnum,buf+62,radix,width,(options>>31)&1);
+    k_draw_text(ctx,x,y,num,-1,color,extra);
 }
 
 #define B5(s1,s2) ((((((*(WORD*)img)>>s1)&31)<<3)|(((*(WORD*)img)>>(s1+5))&7))<<s2)

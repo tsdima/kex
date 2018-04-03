@@ -46,6 +46,7 @@ void k_event_mousemove(k_context* ctx, int x, int y);
 void k_event_mousepress(k_context* ctx, DWORD button);
 void k_event_mouserelease(k_context* ctx, DWORD button);
 void k_event_keypress(k_context* ctx, DWORD key);
+void k_event_network(k_context* ctx);
 
 void k_clear_redraw(k_context* ctx);
 DWORD k_get_mousepos(k_context* ctx, int* x, int* y);

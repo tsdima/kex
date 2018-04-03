@@ -9,6 +9,7 @@ typedef unsigned long long QWORD;
 #define MAX_CHILD 64
 #define MAX_KEYS 120
 #define MAX_USM 16
+#define MAX_SOCKET 32
 #define DEBUG_BOARD_LEN 4096
 
 typedef struct
@@ -44,6 +45,7 @@ typedef struct
     BYTE curpath[256];
     DWORD usm_addr[MAX_USM];
     DWORD usm_size[MAX_USM];
+    int sockets[MAX_SOCKET];
 } k_context;
 
 typedef struct

@@ -233,3 +233,8 @@ void k_clear_ipc(k_context* ctx)
 {
     ctx->event_pending &= ~K_EVMASK_IPC;
 }
+
+void k_event_network(k_context* ctx)
+{
+    ctx->event_pending |= K_EVMASK_NETWORK;
+}
