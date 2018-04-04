@@ -10,6 +10,7 @@ typedef unsigned long long QWORD;
 #define MAX_KEYS 120
 #define MAX_USM 16
 #define MAX_SOCKET 32
+#define MAX_IFACE 8
 #define DEBUG_BOARD_LEN 4096
 
 typedef struct
@@ -78,6 +79,14 @@ typedef struct
     k_user_shm usm[MAX_USM];
     char extfs_key[64];
     char extfs_path[64];
+    DWORD if_count;
+    DWORD if_mac_lo[MAX_IFACE];
+    DWORD if_mac_hi[MAX_IFACE];
+    DWORD if_ip[MAX_IFACE];
+    DWORD if_mask[MAX_IFACE];
+    DWORD if_dns[MAX_IFACE];
+    DWORD if_gateway[MAX_IFACE];
+    char  if_name[MAX_IFACE][32];
     BYTE debug_board[DEBUG_BOARD_LEN];
 } KERNEL_MEM;
 
