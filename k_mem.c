@@ -422,7 +422,7 @@ DWORD k_usm_open(k_context* ctx, DWORD aname, DWORD size, DWORD flags, DWORD* ad
     int id = k_find_usm(aname),i; DWORD top = USER_SHMEM_START; *addr = 0;
     if(id<0 && (flags&(USM_CREATE|USM_OPEN_ALWAYS))==0) return 5;
     if(id>=0 && (flags&USM_CREATE)!=0) return 10;
-    k_user_shm* usm = k_kernel_mem->usm;
+    k_user_shm* usm = k_kernel_mem->usm; int clr = (id<0);
     if(id<0) {
         id = k_find_free_usm(); if(id<0) return 30;
         strncpy(usm[id].name, user_mem(aname), 31); usm[id].flags = flags;
@@ -437,6 +437,7 @@ DWORD k_usm_open(k_context* ctx, DWORD aname, DWORD size, DWORD flags, DWORD* ad
     ctx->usm_size[id] = size;
     ctx->usm_addr[id] = *addr = ptr-(BYTE*)KEX_BASE;
     usm[id].tcount++;
+    if(clr) memset(ptr, 0, size);
     return 0;
 }
 
