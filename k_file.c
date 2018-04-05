@@ -415,3 +415,34 @@ DWORD k_load_skin(k_context* ctx, BYTE* name)
     //for(ctx->retcode = 0; ctx->retcode==0;) k_process_ipc_event(ctx, &msg);
     return 0; // ctx->retcode
 }
+
+DWORD k_pci_get_last_bus()
+{
+    DWORD last = 0,n;
+    struct dirent* e; DIR* d = opendir("/sys/class/pci_bus");
+    if(d!=NULL)
+    {
+        while((e=readdir(d))!=NULL)
+        {
+            if(sscanf(e->d_name,"0000:%x",&n)==1 && n>last) last = n;
+        }
+        closedir(d);
+    }
+    return last;
+}
+
+DWORD k_pci_read_reg(DWORD ebx, DWORD ecx)
+{
+    DWORD bus = (ebx>>8)&255, dev = (ecx>>11)&31, func = (ecx>>8)&7, reg = ecx&255;
+    char fname[256]; BYTE data[64];
+    sprintf(fname, "/sys/class/pci_bus/0000:%02x/device/0000:%02x:%02x.%d/config", bus, bus, dev, func);
+    FILE* fp = fopen(fname, "rb"); if(!fp) return -1;
+    fread(data, 64, 1, fp); fclose(fp);
+    switch(ebx&3)
+    {
+    case 0: return reg<64?data[reg]:-1;
+    case 1: return reg<64&&(reg&1)==0?*(WORD*)(data+reg):-1;
+    case 2: return reg<64&&(reg&3)==0?*(DWORD*)(data+reg):-1;
+    }
+    return -1;
+}

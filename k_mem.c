@@ -126,6 +126,7 @@ void k_kernel_mem_init()
     memcpy(k_kernel_mem->keyboard_layout, _init_keyboard_layout, sizeof(_init_keyboard_layout));
     k_kernel_mem->keyboard_country = 1;
     k_kernel_mem->keyboard_language = 1;
+    k_kernel_mem->pci_enabled = 1;
 }
 
 KERNEL_MEM* kernel_mem()

@@ -8,3 +8,6 @@ DWORD k_set_curpath(k_context* ctx, BYTE* path, int cp);
 DWORD k_get_curpath(k_context* ctx, BYTE* path, int cp, DWORD len);
 DWORD k_set_extfs(BYTE* data);
 DWORD k_load_skin(k_context* ctx, BYTE* name);
+
+DWORD k_pci_get_last_bus();
+DWORD k_pci_read_reg(DWORD ebx, DWORD ecx);

@@ -357,6 +357,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 {
                 case 2: *eax = k_set_keyboard_layout(*ecx, *edx); break;
                 case 5: *eax = k_set_keyboard_lang(*ecx); break;
+                case 12: *eax = 0; kernel_mem()->pci_enabled = *ecx; break;
                 default: err = 1; break;
                 }
                 break;
@@ -379,7 +380,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 9: clock_gettime(CLOCK_MONOTONIC, &now); *eax = now.tv_sec*100+now.tv_nsec/10000000; break;
                 case 10: clock_gettime(CLOCK_MONOTONIC, &now); q = now.tv_sec*1000000000L+now.tv_nsec; *edx=q>>32; *eax=q; break;
                 case 11: *eax = 0; break; // no lowlevel HD access
-                case 12: *eax = 0; break; // no PCI access
+                case 12: *eax = kernel_mem()->pci_enabled; break;
                 default: err = 1; break;
                 }
                 break;
@@ -466,10 +467,14 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 }
                 break;
             case 62:
+                if(kernel_mem()->pci_enabled==0) { *eax = -1; break; }
                 switch(*ebx&255)
                 {
                 case 0: *eax = 0x100; break;
-                default: *eax = -1; break; // no PCI bus
+                case 1: *eax = k_pci_get_last_bus(); break;
+                case 2: *eax = 1; break;
+                case 4: case 5: case 6: *eax = k_pci_read_reg(*ebx,*ecx); break;
+                default: *eax = -1; break;
                 }
                 break;
             case 63:

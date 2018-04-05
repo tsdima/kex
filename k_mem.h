@@ -87,6 +87,7 @@ typedef struct
     DWORD if_dns[MAX_IFACE];
     DWORD if_gateway[MAX_IFACE];
     char  if_name[MAX_IFACE][32];
+    DWORD pci_enabled;
     BYTE debug_board[DEBUG_BOARD_LEN];
 } KERNEL_MEM;
 
