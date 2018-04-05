@@ -19,12 +19,11 @@ typedef struct
     int ofs[9];
 } k_nmcli_line;
 
-BYTE k_if_done = 0;
 BYTE k_if_hwaddr[10];
 DWORD k_if_ip[3];
 DWORD k_if_dns[2];
 
-k_nmcli_line nmcli_lines[] = {
+const k_nmcli_line nmcli_lines[] = {
     {"GENERAL.HWADDR", "%x:%x:%x:%x:%x:%x", k_if_hwaddr, {0,1,2,3,4,5}},
     {"IP4.ADDRESS[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,4,4,5,6,7}},
     {"IP4.DNS[1]", "%d.%d.%d.%d", k_if_dns, {0,1,2,3}},
@@ -35,7 +34,7 @@ k_nmcli_line nmcli_lines[] = {
 
 void k_nmcli_call()
 {
-    char line[512],*p; k_nmcli_line* nm; k_if_done = 1;
+    char line[512],*p; const k_nmcli_line* nm;
     FILE* fp = popen("nmcli d list", "r"); if(!fp) return;
     while(fgets(line, sizeof(line), fp))
     {
@@ -50,29 +49,32 @@ struct timespec k_net_update_timeout;
 
 void k_net_update()
 {
-    if(k_if_done==0) k_nmcli_call();
     struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
     if(clock_gt(&k_net_update_timeout,&now)) return;
     k_net_update_timeout = now; k_net_update_timeout.tv_sec++;
-    KERNEL_MEM* km = kernel_mem(); km->if_count = 0;
-    struct ifaddrs *ifap = NULL,*p; getifaddrs(&ifap);
-    for(p=ifap; p!=NULL; p=p->ifa_next) if(p->ifa_addr!=NULL && p->ifa_addr->sa_family==AF_INET)
+    KERNEL_MEM* km = kernel_mem();
+    if(km->if_count==0)
     {
-        struct sockaddr_in ip,mask; DWORD i = km->if_count++;
-        ip = *(struct sockaddr_in*)p->ifa_addr;
-        mask = *(struct sockaddr_in*)p->ifa_netmask;
-        strcpy(km->if_name[i], p->ifa_name);
-        km->if_ip[i] = ip.sin_addr.s_addr;
-        km->if_mask[i] = mask.sin_addr.s_addr;
-        if(ip.sin_addr.s_addr==k_if_ip[0])
+        k_nmcli_call();
+        struct ifaddrs *ifap = NULL,*p; getifaddrs(&ifap);
+        for(p=ifap; p!=NULL; p=p->ifa_next) if(p->ifa_addr!=NULL && p->ifa_addr->sa_family==AF_INET)
         {
-            km->if_mac_hi[i] = *(WORD*)k_if_hwaddr;
-            km->if_mac_lo[i] = *(DWORD*)(k_if_hwaddr+2);
-            km->if_gateway[i] = k_if_ip[1];
-            km->if_dns[i] = k_if_dns[0];
+            struct sockaddr_in ip,mask; DWORD i = km->if_count++;
+            ip = *(struct sockaddr_in*)p->ifa_addr;
+            mask = *(struct sockaddr_in*)p->ifa_netmask;
+            strcpy(km->if_name[i], p->ifa_name);
+            km->if_ip[i] = ip.sin_addr.s_addr;
+            km->if_mask[i] = mask.sin_addr.s_addr;
+            if(ip.sin_addr.s_addr==k_if_ip[0])
+            {
+                km->if_mac_hi[i] = *(WORD*)k_if_hwaddr;
+                km->if_mac_lo[i] = *(DWORD*)(k_if_hwaddr+2);
+                km->if_gateway[i] = k_if_ip[1];
+                km->if_dns[i] = k_if_dns[0];
+            }
         }
+        if(ifap) freeifaddrs(ifap);
     }
-    if(ifap) freeifaddrs(ifap);
 }
 
 DWORD k_net_info(k_context* ctx, BYTE devNo, BYTE func, DWORD* ebx, DWORD* ecx)
@@ -103,6 +105,7 @@ void ks_replace_socket(k_context* ctx, int cmp, int sock)
 
 DWORD k_net_socket(k_context* ctx, BYTE func, DWORD* ebx, DWORD ecx, DWORD edx, DWORD esi, DWORD edi)
 {
+    k_net_update();
     DWORD ret = -1, err = 11, *p; int pair[2];
     switch(func)
     {
