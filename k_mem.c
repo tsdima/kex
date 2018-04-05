@@ -432,7 +432,7 @@ DWORD k_usm_open(k_context* ctx, DWORD aname, DWORD size, DWORD flags, DWORD* ad
     {
         if((USM_WRITE&flags&~usm[id].flags)!=0) return 10;
     }
-    for(i=0; i<MAX_USM; ++i) if(ctx->usm_addr[i]!=0 && ctx->usm_addr[i]+ctx->usm_addr[i]>top) top = ctx->usm_addr[i]+ctx->usm_addr[i];
+    for(i=0; i<MAX_USM; ++i) if(ctx->usm_addr[i]!=0 && ctx->usm_addr[i]+ctx->usm_size[i]>top) top = ctx->usm_addr[i]+ctx->usm_size[i];
     BYTE* ptr = top+(BYTE*)KEX_BASE; size = ((size-1)|0xFFF)+1;
     ptr = k_shmem_open(USER_SHMEM, id, ptr, size, 0, (flags&(USM_CREATE|USM_OPEN_ALWAYS))!=0 ? NULL : &size);
     ctx->usm_size[id] = size;
