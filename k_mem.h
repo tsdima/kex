@@ -15,6 +15,12 @@ typedef unsigned long long QWORD;
 
 typedef struct
 {
+    DWORD tv_sec;
+    DWORD tv_nsec;
+} k_timespec;
+
+typedef struct
+{
     DWORD pid;
     DWORD tid;
     DWORD shmid;
@@ -27,11 +33,17 @@ typedef struct
     DWORD window_color;
     DWORD window_zpos_me;
     DWORD window_zpos;
+    DWORD window_state;
+    DWORD window_drag_mode;
     char* window_title;
     int window_x;
     int window_y;
     int window_w;
     int window_h;
+    int orig_x;
+    int orig_y;
+    int orig_w;
+    int orig_h;
     int client_x;
     int client_y;
     int mouse_x;
@@ -67,6 +79,8 @@ typedef struct
     char keyboard_layout[3][128];
     int mouse_x;
     int mouse_y;
+    int mouse_dbl_click_delay;
+    k_timespec mouse_dbl_click_timeout;
     WORD desktop_left;
     WORD desktop_top;
     WORD desktop_right;

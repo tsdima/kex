@@ -465,10 +465,10 @@ void k_move_window(k_context* ctx, int x, int y)
     ctx->window_y = y;
 }
 
-void k_fix_size(k_context* ctx, int width, int height)
+void k_min_size(k_context* ctx, int width, int height, int fix)
 {
     XSizeHints size;
-    size.flags = PMinSize | PMaxSize;
+    size.flags = fix ? PMinSize | PMaxSize : PMinSize;
     size.max_width = 0;
     size.min_width = width;
     size.max_height = 0;
@@ -484,7 +484,12 @@ void k_move_size_window(k_context* ctx, int x, int y, int width, int height)
     if (width==-1) width = ctx->window_w-1;
     if (height==-1) height = ctx->window_h-1;
     ++width; ++height;
-    if (window_style<=1 || window_style==4) k_fix_size(ctx, width, height);
+    int minw = skin_params.rmargin+5; if(width<minw) width = minw;
+    int minh = skin_params.height+5; if(height<minh) height = minh;
+    if (window_style<=1 || window_style==4)
+        k_min_size(ctx, width, height, 1);
+    else
+        k_min_size(ctx, minw, minh, 0);
     if (width!=ctx->window_w || height!=ctx->window_h)
         XMoveResizeWindow(display, win, x, y, width, height);
     else if(x!=ctx->window_x || y!=ctx->window_y)
@@ -499,7 +504,7 @@ void k_move_size_window(k_context* ctx, int x, int y, int width, int height)
 }
 
 
-void k_wm_state(k_context* ctx, char *atom, int state)
+void k_wm_state(k_context* ctx, char *atom, char *atom2, int state)
 {
     if (win==0) return;
     XEvent ev; memset(&ev, 0, sizeof(ev));
@@ -509,7 +514,7 @@ void k_wm_state(k_context* ctx, char *atom, int state)
     ev.xclient.format = 32;
     ev.xclient.data.l[0] = state&1;
     ev.xclient.data.l[1] = XInternAtom(display, atom, 0);
-    ev.xclient.data.l[2] = 0;
+    ev.xclient.data.l[2] = atom2==NULL ? 0 : XInternAtom(display, atom2, 0);
     XSendEvent(display, RootWindow(display, 0), 0, SubstructureNotifyMask, &ev);
 }
 
@@ -609,6 +614,31 @@ DWORD k_translate_xkey(XKeyEvent* e, int* ext, int* mod)
     return (scancode<<16)|(charcode<<8);
 }
 
+void k_drag_window(k_context* ctx, int x, int y, int x_root, int y_root)
+{
+    static int x2, y2; if((ctx->window_state&1)!=0) return;
+    int mode = (x<5 ? 1 : (x>ctx->window_w-5 ? 2 : 0)) | (y<5 ? 4 : (y>ctx->window_h-5 ? 8 : 0));
+    if(mode==0 && y<skin_params.height) mode = 15; else if(window_style<=1 || window_style==4) return;
+    if(ctx->window_drag_mode==0 && mode>0)
+    {
+        ctx->window_drag_mode = mode;
+        x2 = x<5 ? ctx->window_x+x+ctx->window_w : ctx->window_x+x-ctx->window_w;
+        y2 = y<5 ? ctx->window_y+y+ctx->window_h : ctx->window_y+y-ctx->window_h;
+    }
+    switch(ctx->window_drag_mode)
+    {
+    case 1: k_move_size_window(ctx, x_root-x, ctx->window_y, x2-x_root-1, ctx->window_h-1); break;
+    case 2: k_move_size_window(ctx, ctx->window_x, ctx->window_y, x_root-x2-1, ctx->window_h-1); break;
+    case 4: k_move_size_window(ctx, ctx->window_x, y_root-y, ctx->window_w-1, y2-y_root-1); break;
+    case 5: k_move_size_window(ctx, x_root-x, y_root-y, x2-x_root-1, y2-y_root-1); break;
+    case 6: k_move_size_window(ctx, ctx->window_x, y_root-y, x_root-x2-1, y2-y_root-1); break;
+    case 8: k_move_size_window(ctx, ctx->window_x, ctx->window_y, ctx->window_w-1, y_root-y2-1); break;
+    case 9: k_move_size_window(ctx, x_root-x, ctx->window_y, x2-x_root-1, y_root-y2-1); break;
+    case 10: k_move_size_window(ctx, ctx->window_x, ctx->window_y, x_root-x2-1, y_root-y2-1); break;
+    case 15: k_move_window(ctx, x_root-x, y_root-y); break;
+    }
+}
+
 void k_process_event(k_context* ctx)
 {
     static DWORD btnxlat[] = {0,1,4,2,8,16}; DWORD button_id;
@@ -671,11 +701,24 @@ void k_process_event(k_context* ctx)
             x = ev.xbutton.x;
             y = ev.xbutton.y;
             button_id = ctx->button_id_pressed;
+            if(k_is_dblclick(ctx) && y<skin_params.height && (window_style==2||window_style==3))
+            {
+                ctx->window_state ^= 1;
+                k_wm_state(ctx, "_NET_WM_STATE_MAXIMIZED_HORZ", "_NET_WM_STATE_MAXIMIZED_VERT", ctx->window_state&1);
+                if ((ctx->window_state&1)==0)
+                {
+                    k_move_size_window(ctx, ctx->orig_x, ctx->orig_y, ctx->orig_w-1, ctx->orig_h-1);
+                }
+            }
             k_event_mousepress(ctx, btnxlat[ev.xbutton.button]);
             if(button_id != ctx->button_id_pressed && (ctx->button_id_pressed&KBS_NO_PRESS)==0)
             {
                 k_button* b = k_find_button_by_id(ctx, ctx->button_id_pressed);
                 if (b!=NULL) k_draw_button_pressed(b);
+            }
+            if((ev.xbutton.button & Button1)!=0 && ctx->button_id_pressed==0)
+            {
+                k_drag_window(ctx, x, y, ctx->window_x+x, ctx->window_y+y);
             }
             break;
 
@@ -692,12 +735,13 @@ void k_process_event(k_context* ctx)
                 k_button* b = k_find_button(ctx);
                 if (b!=NULL && b->id == 0xFFFF) XIconifyWindow(display, win, 0);
             }
+            ctx->window_drag_mode = 0;
             break;
 
         case MotionNotify:
-            if((ev.xmotion.state & Button1Mask)!=0 && y<skin_params.height && ctx->button_id_pressed==0)
+            if((ev.xmotion.state & Button1Mask)!=0 && ctx->button_id_pressed==0)
             {
-                k_move_window(ctx, ev.xmotion.x_root - x, ev.xmotion.y_root - y);
+                k_drag_window(ctx, x, y, ev.xmotion.x_root, ev.xmotion.y_root);
             }
             k_event_mousemove(ctx, ev.xmotion.x_root, ev.xmotion.y_root);
             break;
@@ -726,6 +770,13 @@ void k_process_event(k_context* ctx)
                 ctx->window_h = ev.xconfigure.height;
                 ctx->mouse_x = kernel_mem()->mouse_x - ctx->window_x;
                 ctx->mouse_y = kernel_mem()->mouse_y - ctx->window_y;
+                if ((ctx->window_state&1)==0)
+                {
+                    ctx->orig_x = ctx->window_x;
+                    ctx->orig_y = ctx->window_y;
+                    ctx->orig_w = ctx->window_w;
+                    ctx->orig_h = ctx->window_h;
+                }
             }
             break;
         }
@@ -757,8 +808,7 @@ void k_window(k_context* ctx, int x, int y, DWORD width, DWORD height, DWORD col
 
         if(window_style<=1)
         {
-            k_wm_state(ctx, "_NET_WM_STATE_SKIP_TASKBAR", 1);
-            k_wm_state(ctx, "_NET_WM_STATE_SKIP_PAGER", 1);
+            k_wm_state(ctx, "_NET_WM_STATE_SKIP_TASKBAR", "_NET_WM_STATE_SKIP_PAGER", 1);
         }
 
         if(window_style!=1)

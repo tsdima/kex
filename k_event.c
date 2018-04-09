@@ -2,11 +2,13 @@
 #include "k_event.h"
 
 #include <string.h>
+#include <time.h>
 
 #define MAX_BUTTONS 256
 
 #define g_mouse_x kernel_mem()->mouse_x
 #define g_mouse_y kernel_mem()->mouse_y
+#define g_mouse_t kernel_mem()->mouse_dbl_click_timeout
 
 #define g_modifiers kernel_mem()->keyboard_modifiers
 #define g_keys kernel_mem()->keyboard_buffer
@@ -131,6 +133,9 @@ void k_event_mousepress(k_context* ctx, DWORD button)
     ctx->mouse_last_pressed = button&0xFE;
     k_button* b = k_find_button(ctx);
     if(b!=NULL) ctx->button_id_pressed = b->id;
+    int dbl = k_is_dblclick(ctx);
+    k_time_get(&g_mouse_t);
+    if(!dbl) k_time_add_ms(&g_mouse_t, kernel_mem()->mouse_dbl_click_delay*10);
 }
 
 void k_event_mouserelease(k_context* ctx, DWORD button)
@@ -170,6 +175,12 @@ DWORD k_get_mousestate(k_context* ctx)
     ctx->event_pending &= ~K_EVMASK_MOUSE;
     ctx->mouse_state &= 0xFF;
     return ret;
+}
+
+int k_is_dblclick(k_context* ctx)
+{
+    k_timespec now; k_time_get(&now);
+    return k_time_gt(&g_mouse_t, &now);
 }
 
 DWORD k_get_button(k_context* ctx)
@@ -237,4 +248,43 @@ void k_clear_ipc(k_context* ctx)
 void k_event_network(k_context* ctx)
 {
     ctx->event_pending |= K_EVMASK_NETWORK;
+}
+
+void k_time_get(k_timespec* time)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    time->tv_sec = ts.tv_sec;
+    time->tv_nsec = ts.tv_nsec;
+}
+
+void k_time_add_ms(k_timespec* time, int ms)
+{
+    ms += time->tv_nsec/1000000;
+    time->tv_sec += ms/1000; ms %= 1000;
+    time->tv_nsec = time->tv_nsec%1000000 + ms*1000000;
+}
+
+int k_time_gt(k_timespec* a, k_timespec* b)
+{
+    return a->tv_sec > b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec > b->tv_nsec);
+}
+
+DWORD bcd(DWORD n)
+{
+    return n<10 ? n : (bcd(n/10)<<4)|(n%10);
+}
+
+DWORD k_bcd_time()
+{
+    time_t ltime; struct tm* ltm;
+    ltime = time(NULL); ltm = localtime(&ltime);
+    return (((bcd(ltm->tm_sec)<<8)|bcd(ltm->tm_min))<<8)|bcd(ltm->tm_hour);
+}
+
+DWORD k_bcd_date()
+{
+    time_t ltime; struct tm* ltm;
+    ltime = time(NULL); ltm = localtime(&ltime);
+    return (((bcd(ltm->tm_mday)<<8)|bcd(ltm->tm_mon+1))<<8)|bcd(ltm->tm_year%100);
 }

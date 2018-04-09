@@ -54,6 +54,7 @@ DWORD k_get_mouse(int* x, int* y);
 DWORD k_get_mousestate(k_context* ctx);
 DWORD k_get_key(k_context* ctx);
 DWORD k_get_button(k_context* ctx);
+int k_is_dblclick(k_context* ctx);
 
 void k_clear_buttons(k_context* ctx);
 void k_define_button(k_context* ctx, int x, int y, int w, int h, int id);
@@ -71,3 +72,9 @@ DWORD k_set_keyboard_lang(DWORD id);
 
 void k_event_ipc(k_context* ctx);
 void k_clear_ipc(k_context* ctx);
+
+void k_time_get(k_timespec* time);
+void k_time_add_ms(k_timespec* time, int ms);
+int k_time_gt(k_timespec* a, k_timespec* b);
+DWORD k_bcd_time();
+DWORD k_bcd_date();

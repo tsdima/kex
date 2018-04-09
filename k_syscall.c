@@ -14,30 +14,12 @@
 #include <string.h>
 #include <ucontext.h>
 #include <unistd.h>
-#include <time.h>
 
 int base_pid = 0;
 
 int gettid()
 {
     return getpid()-base_pid;
-}
-
-void clock_add_ms(struct timespec* time, int ms)
-{
-    ms += time->tv_nsec/1000000;
-    time->tv_sec += ms/1000; ms %= 1000;
-    time->tv_nsec = time->tv_nsec%1000000 + ms*1000000;
-}
-
-int clock_gt(struct timespec* a, struct timespec* b)
-{
-    return a->tv_sec > b->tv_sec || (a->tv_sec == b->tv_sec && a->tv_nsec > b->tv_nsec);
-}
-
-DWORD bcd(DWORD n)
-{
-    return n<10 ? n : (bcd(n/10)<<4)|(n%10);
 }
 
 void k_debug_put(BYTE ch)
@@ -112,7 +94,7 @@ void k_get_slot_info(k_context* ctx, K_SLOT_INFO* info, int slot)
     info->window_h = ctx->window_h>0?ctx->window_h-1:0;
     info->state = ctx->tid!=0 ? 0 : 9;
     k_get_client_rect(ctx, &info->client_x, &info->client_y, &info->client_w, &info->client_h);
-    info->window_state = 0;
+    info->window_state = ctx->window_state;
     info->event_mask = ctx->event_mask;
     info->kbd_mode = ctx->kbd_mode;
 }
@@ -254,7 +236,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
         WORD cmd = k_get_word(gregs[REG_RIP]);
         if(cmd==0x40CD)
         {
-            struct timespec now,timeout; time_t ltime; struct tm* ltm; DWORD x,y; QWORD q; int err=0;
+            k_timespec now,timeout; DWORD x,y; QWORD q; int err=0; KERNEL_MEM* km = kernel_mem();
             k_context* ctx = g_slot+slot; DWORD f_nr = *eax;
             switch(*eax)
             {
@@ -271,19 +253,18 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 *eax = k_get_key(ctx);
                 break;
             case 3:
-                ltime = time(NULL); ltm = localtime(&ltime);
-                *eax = (((bcd(ltm->tm_sec)<<8)|bcd(ltm->tm_min))<<8)|bcd(ltm->tm_hour);
+                *eax = k_bcd_time();
                 break;
             case 4:
                 k_draw_text(ctx, *ebx>>16, *ebx&0xFFFF, user_pb(*edx), *esi, *ecx, *edi);
                 break;
             case 5:
-                clock_gettime(CLOCK_MONOTONIC, &timeout);
-                clock_add_ms(&timeout, *ebx*10);
+                k_time_get(&timeout);
+                k_time_add_ms(&timeout, *ebx*10);
                 for(;;)
                 {
-                    clock_gettime(CLOCK_MONOTONIC, &now);
-                    if(clock_gt(&now, &timeout)) break;
+                    k_time_get(&now);
+                    if(k_time_gt(&now, &timeout)) break;
                     k_process_event(ctx);
                 }
                 break;
@@ -336,7 +317,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 3: k_make_active(*ecx); break;
                 case 4: *eax = 1<<30; break; // CPU idle clocks
                 case 5: *eax = 1<<30; break; // CPU clock
-                case 7: *eax = kernel_mem()->active_slot; break;
+                case 7: *eax = km->active_slot; break;
                 case 16: *eax = 1<<19; break; // RAM size free KB
                 case 17: *eax = 1<<20; break; // RAM size total KB
                 case 18: x = k_find_slot(*ecx); if(x==0) *eax=-1; else { *eax=0; k_kill_by_slot(x); } break;
@@ -344,7 +325,8 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                     switch(*ecx)
                     {
                     case 4: k_move_mouse(*edx>>16, *edx&0xFFFF); break;
-                    case 6: *eax = 100; break;
+                    case 6: *eax = km->mouse_dbl_click_delay; break;
+                    case 7: km->mouse_dbl_click_delay = *edx&255; break;
                     default: err = 1; break;
                     }
                     break;
@@ -357,18 +339,18 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 {
                 case 2: *eax = k_set_keyboard_layout(*ecx, *edx); break;
                 case 5: *eax = k_set_keyboard_lang(*ecx); break;
-                case 12: *eax = 0; kernel_mem()->pci_enabled = *ecx; break;
+                case 12: *eax = 0; km->pci_enabled = *ecx; break;
                 default: err = 1; break;
                 }
                 break;
             case 23:
-                clock_gettime(CLOCK_MONOTONIC, &timeout);
-                clock_add_ms(&timeout, *ebx*10);
+                k_time_get(&timeout);
+                k_time_add_ms(&timeout, *ebx*10);
                 k_process_event(ctx); *eax = k_check_event(ctx);
                 while(*eax == 0)
                 {
-                    clock_gettime(CLOCK_MONOTONIC, &now);
-                    if(clock_gt(&now, &timeout)) break;
+                    k_time_get(&now);
+                    if(k_time_gt(&now, &timeout)) break;
                     k_process_event(ctx); *eax = k_check_event(ctx);
                 }
                 break;
@@ -377,16 +359,15 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 {
                 case 2: *eax = k_get_keyboard_layout(*ecx, *edx); break;
                 case 5: *eax = k_get_keyboard_lang(); break;
-                case 9: clock_gettime(CLOCK_MONOTONIC, &now); *eax = now.tv_sec*100+now.tv_nsec/10000000; break;
-                case 10: clock_gettime(CLOCK_MONOTONIC, &now); q = now.tv_sec*1000000000L+now.tv_nsec; *edx=q>>32; *eax=q; break;
+                case 9: k_time_get(&now); *eax = now.tv_sec*100+now.tv_nsec/10000000; break;
+                case 10: k_time_get(&now); q = now.tv_sec*1000000000L+now.tv_nsec; *edx=q>>32; *eax=q; break;
                 case 11: *eax = 0; break; // no lowlevel HD access
-                case 12: *eax = kernel_mem()->pci_enabled; break;
+                case 12: *eax = km->pci_enabled; break;
                 default: err = 1; break;
                 }
                 break;
             case 29:
-                ltime = time(NULL); ltm = localtime(&ltime);
-                *eax = (((bcd(ltm->tm_mday)<<8)|bcd(ltm->tm_mon+1))<<8)|bcd(ltm->tm_year%100);
+                *eax = k_bcd_date();
                 break;
             case 30:
                 switch(*ebx)
@@ -467,7 +448,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 }
                 break;
             case 62:
-                if(kernel_mem()->pci_enabled==0) { *eax = -1; break; }
+                if(km->pci_enabled==0) { *eax = -1; break; }
                 switch(*ebx&255)
                 {
                 case 0: *eax = 0x100; break;

@@ -1,4 +1,5 @@
 #include "k_mem.h"
+#include "k_event.h"
 #include "k_net.h"
 
 #include <stdio.h>
@@ -7,9 +8,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
-#include <time.h>
-
-int clock_gt(struct timespec* a, struct timespec* b);
 
 typedef struct
 {
@@ -45,12 +43,12 @@ void k_nmcli_call()
     fclose(fp);
 }
 
-struct timespec k_net_update_timeout;
+k_timespec k_net_update_timeout;
 
 void k_net_update()
 {
-    struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
-    if(clock_gt(&k_net_update_timeout,&now)) return;
+    k_timespec now; k_time_get(&now);
+    if(k_time_gt(&k_net_update_timeout,&now)) return;
     k_net_update_timeout = now; k_net_update_timeout.tv_sec++;
     KERNEL_MEM* km = kernel_mem();
     if(km->if_count==0)
