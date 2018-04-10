@@ -242,6 +242,7 @@ void k_exec(k_context* ctx, char* kexfile, char* args)
 
 void k_start_thread(DWORD eip, DWORD esp)
 {
+#ifdef __x86_64__
      __asm__ __volatile__ (
         "mov $0x17, %%ax\n"
         "mov %%ax, %%ds\n"
@@ -251,4 +252,14 @@ void k_start_thread(DWORD eip, DWORD esp)
         "lret\n" : :
         "r" (k_stub_jmp(eip, esp)+0xf00000000) : "ax"
     );
+#else
+    k_stub_jmp(eip, esp);
+     __asm__ __volatile__ (
+        "mov $0x17, %ax\n"
+        "mov %ax, %ds\n"
+        "mov %ax, %es\n"
+        "mov %ax, %ss\n"
+        "jmp $0x0f, $0x3FFFF000\n"
+    );
+#endif
 }

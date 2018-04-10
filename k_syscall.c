@@ -103,7 +103,7 @@ void k_set_slot(DWORD slot, int shmid, char* name)
 {
     k_context* ctx = g_slot+slot;
     char* p = strrchr(name,'/'); if(p) name = p+1;
-    
+
     memset(ctx, 0, sizeof(k_context));
     ctx->pid = getpid();
     ctx->tid = gettid();
@@ -221,19 +221,59 @@ DWORD k_send_event(DWORD type, DWORD param)
     return 0;
 }
 
+#define R_FL     gregs[REG_EFL]
+#define R_ERR    gregs[REG_ERR]
+#define R_TRAPNO gregs[REG_TRAPNO]
+
+#ifdef __x86_64__
+
+#define R_AX gregs[REG_RAX]
+#define R_BX gregs[REG_RBX]
+#define R_CX gregs[REG_RCX]
+#define R_DX gregs[REG_RDX]
+#define R_SI gregs[REG_RSI]
+#define R_DI gregs[REG_RDI]
+#define R_BP gregs[REG_RBP]
+#define R_SP gregs[REG_RSP]
+#define R_IP gregs[REG_RIP]
+#define R_CS ((WORD)gregs[REG_CSGSFS])
+
+#define FMT1 "%08llx"
+#define FMT2 "%016llx"
+#define FMTD "%lld"
+
+#else
+
+#define R_AX gregs[REG_EAX]
+#define R_BX gregs[REG_EBX]
+#define R_CX gregs[REG_ECX]
+#define R_DX gregs[REG_EDX]
+#define R_SI gregs[REG_ESI]
+#define R_DI gregs[REG_EDI]
+#define R_BP gregs[REG_EBP]
+#define R_SP gregs[REG_ESP]
+#define R_IP gregs[REG_EIP]
+#define R_CS gregs[REG_CS]
+
+#define FMT1 "%08x"
+#define FMT2 "%08x"
+#define FMTD "%d"
+
+#endif
+
 void OnSigSegv(int sig, siginfo_t* info, void* extra)
 {
     greg_t* gregs = ((struct ucontext*)extra)->uc_mcontext.gregs; DWORD slot = k_get_slot();
-    DWORD* eax = (DWORD*)&gregs[REG_RAX];
-    DWORD* ebx = (DWORD*)&gregs[REG_RBX];
-    DWORD* ecx = (DWORD*)&gregs[REG_RCX];
-    DWORD* edx = (DWORD*)&gregs[REG_RDX];
-    DWORD* esi = (DWORD*)&gregs[REG_RSI];
-    DWORD* edi = (DWORD*)&gregs[REG_RDI];
-    DWORD* ebp = (DWORD*)&gregs[REG_RBP];
-    if(gregs[REG_TRAPNO]==13 && (gregs[REG_CSGSFS]&0xFFFF) == 0x0f && slot!=0)
+    DWORD* eax = (DWORD*)&R_AX;
+    DWORD* ebx = (DWORD*)&R_BX;
+    DWORD* ecx = (DWORD*)&R_CX;
+    DWORD* edx = (DWORD*)&R_DX;
+    DWORD* esi = (DWORD*)&R_SI;
+    DWORD* edi = (DWORD*)&R_DI;
+    DWORD* ebp = (DWORD*)&R_BP;
+    if(R_TRAPNO==13 && R_CS == 0x0f && slot!=0)
     {
-        WORD cmd = k_get_word(gregs[REG_RIP]);
+        WORD cmd = k_get_word(R_IP);
         if(cmd==0x40CD)
         {
             k_timespec now,timeout; DWORD x,y; QWORD q; int err=0; KERNEL_MEM* km = kernel_mem();
@@ -540,20 +580,20 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
             }
             if(err==1)
             {
-                printf("%02X.%08X: mcall %d, 0x%X, 0x%X, 0x%X\n", slot, (DWORD)gregs[REG_RIP], f_nr, *ebx, *ecx, *edx);
+                printf("%02X.%08X: mcall %d, 0x%X, 0x%X, 0x%X\n", slot, (DWORD)R_IP, f_nr, *ebx, *ecx, *edx);
             }
-            gregs[REG_RIP] = k_stub_resume(gregs[REG_RIP]+2);
+            R_IP = k_stub_resume(R_IP+2);
             return;
         }
     }
-    if((gregs[REG_CSGSFS]&0xFFFF) == 0x0f && slot!=0)
+    if(R_CS == 0x0f && slot!=0)
     {
-        DWORD* stk = user_pd(gregs[REG_RSP]);
+        DWORD* stk = user_pd(R_SP);
         k_debug_printf("Process - forced terminate PID: %08X [%.12s]\n", g_slot[slot].tid, g_slot[slot].name);
         k_debug_printf("EAX : %08X EBX : %08X ECX : %08X\n", *eax, *ebx, *ecx);
         k_debug_printf("EDX : %08X ESI : %08X EDI : %08X\n", *edx, *esi, *edi);
-        k_debug_printf("EBP : %08X EIP : %08X ESP : %08X\n", *ebp, (DWORD)gregs[REG_RIP], (DWORD)gregs[REG_RSP]);
-        k_debug_printf("Flags : %08X CS: 0x%08X (application)\n", (DWORD)gregs[REG_EFL], ((DWORD)gregs[REG_CSGSFS])&0xFFFF);
+        k_debug_printf("EBP : %08X EIP : %08X ESP : %08X\n", *ebp, (DWORD)R_IP, (DWORD)R_SP);
+        k_debug_printf("Flags : %08X CS: 0x%08X (application)\n", (DWORD)R_FL, R_CS);
         k_debug_printf("Stack dump:\n");
         k_debug_printf("[ESP+00]: %08X [ESP+04]: %08X [ESP+08]: %08X\n", stk[0], stk[1], stk[2]);
         k_debug_printf("[ESP+12]: %08X [ESP+16]: %08X [ESP+20]: %08X\n", stk[3], stk[4], stk[5]);
@@ -561,11 +601,11 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
         k_debug_printf("destroy app object\n");
         printf("Process: %.12s\n", g_slot[slot].name);
     }
-    printf("err : 0x%08llx trapno: %lld addr: 0x%016llx\n", gregs[REG_ERR], gregs[REG_TRAPNO], (greg_t)info->si_addr);
-    printf("EAX : 0x%016llx EBX : 0x%016llx ECX : 0x%016llx\n", gregs[REG_RAX], gregs[REG_RBX], gregs[REG_RCX]);
-    printf("EDX : 0x%016llx ESI : 0x%016llx EDI : 0x%016llx\n", gregs[REG_RDX], gregs[REG_RSI], gregs[REG_RDI]);
-    printf("EBP : 0x%016llx EIP : 0x%016llx ESP : 0x%016llx\n", gregs[REG_RBP], gregs[REG_RIP], gregs[REG_RSP]);
-    printf("Flags : 0x%08llx CS: 0x%04llx\n", gregs[REG_EFL], gregs[REG_CSGSFS]&0xFFFF);
+    printf("err : 0x"FMT1" trapno: "FMTD" addr: 0x"FMT2"\n", R_ERR, R_TRAPNO, (greg_t)info->si_addr);
+    printf("EAX : 0x"FMT2" EBX : 0x"FMT2" ECX : 0x"FMT2"\n", R_AX, R_BX, R_CX);
+    printf("EDX : 0x"FMT2" ESI : 0x"FMT2" EDI : 0x"FMT2"\n", R_DX, R_SI, R_DI);
+    printf("EBP : 0x"FMT2" EIP : 0x"FMT2" ESP : 0x"FMT2"\n", R_BP, R_IP, R_SP);
+    printf("Flags : 0x"FMT1" CS: 0x%04x\n", R_FL, R_CS);
     FILE* fp=fopen("core.kex","wb"); fwrite(user_mem(0), 1, k_mem_get_size(), fp); fclose(fp);
     exit(0);
 };
