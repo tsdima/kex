@@ -948,7 +948,7 @@ BYTE* k_itoa(QWORD n, BYTE* buf, DWORD radix, DWORD width, DWORD trim)
 
 void k_draw_num(k_context* ctx, int x, int y, DWORD color, DWORD options, void* pnum, DWORD extra)
 {
-    static char bases[] = {10,16,2,8}; BYTE buf[63]; buf[63]=0;
+    static char bases[] = {10,16,2,8}; BYTE buf[64]; buf[63]=0;
     DWORD width = (options>>16)&63, radix = bases[(options>>8)&3];
     BYTE* num = k_itoa((options>>30)&1?*(QWORD*)pnum:*(DWORD*)pnum,buf+62,radix,width,(options>>31)&1);
     k_draw_text(ctx,x,y,num,-1,color,extra);
