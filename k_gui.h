@@ -102,3 +102,7 @@ void k_set_skin(BYTE* skin);
 DWORD k_get_skin_height();
 void k_get_skin_colors(BYTE* buf, DWORD size);
 void k_get_client_rect(k_context* ctx, DWORD* x, DWORD* y, DWORD* w, DWORD* h);
+
+DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param);
+DWORD k_cursor_set(k_context* ctx, DWORD handle);
+DWORD k_cursor_delete(k_context* ctx, DWORD handle);

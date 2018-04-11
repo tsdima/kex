@@ -438,6 +438,9 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 1: *eax = k_get_mousepos(ctx,0,0); break;
                 case 2: *eax = k_get_mousestate(ctx)&0xFF; break;
                 case 3: *eax = k_get_mousestate(ctx); break;
+                case 4: *eax = k_cursor_load(ctx, *ecx, *edx); break;
+                case 5: *eax = k_cursor_set(ctx, *ecx); break;
+                case 6: *eax = k_cursor_delete(ctx, *ecx); break;
                 case 7: *eax = 0; break; // TODO: scroll data
                 default: err = 1; break;
                 }

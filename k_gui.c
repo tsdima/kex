@@ -1021,3 +1021,108 @@ void k_blit_image(k_context* ctx, DWORD rop, DWORD param)
     if((rop&(1<<29))==0) { x-= ctx->client_x; y-= ctx->client_y; };
     k_draw_image(ctx,x,y,w,h,data+bp->src_y*bp->src_stride+bp->src_x*4,32,bp->src_stride-w*4,0);
 }
+
+#pragma pack(push,1)
+typedef struct
+{
+  DWORD biSize;
+  LONG  biWidth;
+  LONG  biHeight;
+  WORD  biPlanes;
+  WORD  biBitCount;
+  DWORD biCompression;
+  DWORD biSizeImage;
+  LONG  biXPelsPerMeter;
+  LONG  biYPelsPerMeter;
+  DWORD biClrUsed;
+  DWORD biClrImportant;
+} BITMAPINFOHEADER;
+
+typedef struct
+{
+    BYTE width;
+    BYTE height;
+    BYTE colors;
+    BYTE reserved;
+    WORD hot_x;
+    WORD hot_y;
+    DWORD size;
+    DWORD offset;
+} k_icondirentry;
+
+typedef struct
+{
+    WORD reserved;
+    WORD type; // 1 - ICO, 2 - CUR
+    WORD count;
+    k_icondirentry entry[1];
+} k_icondir;
+#pragma pack(pop)
+
+#define C2XC(c,xc) xc.blue = 0x101*((ppal[c])&255); xc.green = 0x101*((ppal[c]>>8)&255); xc.red = 0x101*((ppal[c]>>16)&255);
+
+DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param)
+{
+    WORD load_type = param, hx = (param>>24)&255, hy = (param>>16)&255;
+    XColor fg={0,0,0,0},bk={0,0xFFFF,0xFFFF,0xFFFF}; DWORD pimg[32],pmask[32];
+    if(load_type==1)
+    {
+        void* data = user_mem(addr);
+
+        k_icondir* pd = data;
+        k_icondirentry* pe = pd->entry; hx = pe->hot_x; hy = pe->hot_y;
+        BITMAPINFOHEADER* pbmp = (BITMAPINFOHEADER*)(pe->offset+(BYTE*)data);
+
+        if(pd->type!=2||pd->count!=1||pe->width!=32||pe->height!=32||pbmp->biBitCount!=8)
+            { k_printf("not supported cursor (%dx%d %dbpp)\n",pe->width,pe->height,pbmp->biBitCount); return 0; }
+
+        DWORD* ppal = (DWORD*)(pe->offset+pbmp->biSize+(BYTE*)data);
+        DWORD clrs = pbmp->biClrUsed!=0 ? pbmp->biClrUsed : 1<<pbmp->biBitCount,i,j,k,g[256],c1,c2,n1=0,n2=0;
+        BYTE* pi = (BYTE*)(ppal+clrs),*p; memset(g,0,sizeof(g));
+        switch(pbmp->biBitCount)
+        {
+        case 8:
+            for(i=0; i<32*32; ++i)
+            {
+                BYTE c = pi[i]; g[c]++;
+                if(g[c]>n1) n1 = g[c1=c]; else
+                    if(g[c]>n2) n2 = g[c2=c];
+            }
+            C2XC(c1,bk); C2XC(c2,fg); p=pi+32*32;
+            for(i=0; i<32; ++i)
+            {
+                for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if(pi[i*32+j]==c2) n2|=n1;
+                pimg[31-i] = n2;
+                for(j=0,n1=1,c1=0; j<4; ++j,++p) for(k=0,n2=*p; k<8; ++k,n1<<=1,n2<<=1) if((n2&0x80)==0) c1|=n1;
+                pmask[31-i] = c1;
+            }
+            break;
+        }
+    }
+    else
+    {
+        k_printf("not supported cursor loading type (%d)\n", load_type); return 0;
+    }
+    Colormap cmap = DefaultColormap(display, 0);
+    XAllocColor(display, cmap, &fg);
+    XAllocColor(display, cmap, &bk);
+    Pixmap img = XCreatePixmapFromBitmapData(display, RootWindow(display, 0), (char*)pimg, 32,32, 1,0, 1);
+    Pixmap mask = XCreatePixmapFromBitmapData(display, RootWindow(display, 0), (char*)pmask, 32,32, 1,0, 1);
+    Cursor cur = XCreatePixmapCursor(display, img, mask, &fg, &bk, hx, hy);
+    XFreePixmap(display, img); XFreePixmap(display, mask);
+    return cur;
+}
+
+DWORD k_cursor_set(k_context* ctx, DWORD handle)
+{
+    static DWORD last_cursor_handle = 0;
+    DWORD ret = last_cursor_handle; last_cursor_handle = handle;
+    if(win!=0) XDefineCursor(display, win, handle);
+    return ret;
+}
+
+DWORD k_cursor_delete(k_context* ctx, DWORD handle)
+{
+    XFreeCursor(display, handle);
+    return 0;
+}
