@@ -12,8 +12,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include <ucontext.h>
 #include <unistd.h>
+#include <signal.h>
+#include <sys/ucontext.h>
 
 int base_pid = 0;
 
