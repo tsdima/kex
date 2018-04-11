@@ -495,7 +495,7 @@ DWORD k_clipboard_get(DWORD id)
 {
     DWORD size,addr,*ptr = k_shmem_open(CLIPBOARD_SHMEM, id, CLIPBOARD_BASE, 0, 0, &size);
     if(ptr == MAP_FAILED) return 1;
-    addr = k_heap_alloc_noclear(size);
+    addr = k_heap_alloc((size+0xFFF)&-0x1000);
     memcpy(user_pd(addr), ptr, size);
     munmap(ptr, size);
     return addr;
