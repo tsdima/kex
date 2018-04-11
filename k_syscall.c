@@ -470,7 +470,15 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 }
                 break;
             case 54:
-                *eax = -1; err = 1; // TODO: clipboard
+                switch(*ebx)
+                {
+                case 0: *eax = km->clipboard_count; break;
+                case 1: *eax = k_clipboard_get(*ecx); break;
+                case 2: *eax = k_clipboard_add(*ecx, *edx); break;
+                case 3: *eax = k_clipboard_remove_last(); break;
+                case 4: *eax = 0; break;
+                default: err = 1; break;
+                }
                 break;
             case 60:
                 switch(*ebx)

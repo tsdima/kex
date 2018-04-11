@@ -102,6 +102,7 @@ typedef struct
     DWORD if_gateway[MAX_IFACE];
     char  if_name[MAX_IFACE][32];
     DWORD pci_enabled;
+    DWORD clipboard_count;
     BYTE debug_board[DEBUG_BOARD_LEN];
 } KERNEL_MEM;
 
@@ -142,6 +143,10 @@ void* user_mem(DWORD addr);
 void* k_skin_alloc(DWORD size);
 BYTE* k_skin_open();
 void  k_skin_close();
+
+DWORD k_clipboard_add(DWORD size, DWORD addr);
+DWORD k_clipboard_get(DWORD id);
+DWORD k_clipboard_remove_last();
 
 DWORD k_stub_resume(DWORD eip);
 DWORD k_stub_jmp(DWORD eip, DWORD esp);

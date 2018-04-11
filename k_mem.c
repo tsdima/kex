@@ -26,6 +26,9 @@ int modify_ldt(int func, void* ptr, unsigned long bytecount);
 #define SKIN_SHMEM "/kolibri.skin"
 #define SKIN_BASE (void*)0xC1000000
 
+#define CLIPBOARD_SHMEM "/kolibri.clip.%d"
+#define CLIPBOARD_BASE (void*)0xC2000000
+
 #define APP_SHMEM "/kolibri.app.%d"
 #define KEX_BASE 0x40000000L
 
@@ -477,6 +480,32 @@ void k_skin_close()
 {
     if(k_skin_data==NULL) return;
     munmap(k_skin_data, k_skin_size); k_skin_data = NULL;
+}
+
+DWORD k_clipboard_add(DWORD size, DWORD addr)
+{
+    DWORD* ptr = k_shmem_open(CLIPBOARD_SHMEM, k_kernel_mem->clipboard_count++, CLIPBOARD_BASE, size, 0, NULL);
+    if(ptr == MAP_FAILED) return 1;
+    memcpy(ptr, user_pd(addr), size); *ptr = size;
+    munmap(ptr, size);
+    return 0;
+}
+
+DWORD k_clipboard_get(DWORD id)
+{
+    DWORD size,addr,*ptr = k_shmem_open(CLIPBOARD_SHMEM, id, CLIPBOARD_BASE, 0, 0, &size);
+    if(ptr == MAP_FAILED) return 1;
+    addr = k_heap_alloc_noclear(size);
+    memcpy(user_pd(addr), ptr, size);
+    munmap(ptr, size);
+    return addr;
+}
+
+DWORD k_clipboard_remove_last()
+{
+    if(k_kernel_mem->clipboard_count==0) return 1;
+    k_shmem_unlink(CLIPBOARD_SHMEM, --k_kernel_mem->clipboard_count);
+    return 0;
 }
 
 DWORD k_stub_resume(DWORD eip)
