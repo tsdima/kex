@@ -1,9 +1,11 @@
 #include "k_mem.h"
 #include "k_event.h"
 #include "k_iconv.h"
+#include "k_file.h"
 #include "k_ipc.h"
 #include "k_gui.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -1059,26 +1061,55 @@ typedef struct
 } k_icondir;
 #pragma pack(pop)
 
-#define C2XC(c,xc) xc.blue = 0x101*((ppal[c])&255); xc.green = 0x101*((ppal[c]>>8)&255); xc.red = 0x101*((ppal[c]>>16)&255);
+#define C2XC(c,xc) xc.blue = 0x101*((c)&255); xc.green = 0x101*(((c)>>8)&255); xc.red = 0x101*(((c)>>16)&255);
+
+#define FNDCOL(t,s) \
+    for(i=0; i<32*32; ++i) \
+    { \
+        DWORD c = t&pi[i*s]; \
+        for(j=0; j<256 && g[j]!=0 && gc[j]!=c; ++j); \
+        if(j>=256) break; if(g[j]==0) gc[j] = c; g[j]++; \
+        if(g[j]>n1) n1 = g[c1=j]; else \
+            if(g[j]>n2) n2 = g[c2=j]; \
+    } \
+    C2XC(gc[c1],bk); C2XC(gc[c2],fg);
+
+#define LDR(t,s) FNDCOL(t,s) \
+    p=pi+32*32*s; \
+    for(i=0; i<32; ++i) \
+    { \
+        for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if((t&pi[(i*32+j)*s])==gc[c2]) n2|=n1; \
+        pimg[31-i] = n2; \
+        for(j=0,n1=1,n2=0; j<4; ++j,++p) for(k=0,c1=*p; k<8; ++k,n1<<=1,c1<<=1) if((c1&0x80)==0) n2|=n1; \
+        pmask[31-i] = n2; \
+    }
 
 DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param)
 {
     WORD load_type = param, hx = (param>>24)&255, hy = (param>>16)&255;
     XColor fg={0,0,0,0},bk={0,0xFFFF,0xFFFF,0xFFFF}; DWORD pimg[32],pmask[32];
-    if(load_type==1)
+    DWORD i,j,k,g[256],gc[256],c1,c2,n1=0,n2=0; memset(g,0,sizeof(g));
+    if(load_type<=1)
     {
         void* data = user_mem(addr);
+        if(load_type==0)
+        {
+            char fname[512]; k_parse_name(ctx, data, 0, fname, sizeof(fname));
+            FILE* fp = fopen(fname, "rb"); if(fp==NULL) return 0;
+            fseek(fp, 0, SEEK_END); i = ftell(fp); fseek(fp, 0, SEEK_SET);
+            data = malloc(i); fread(data, 1, i, fp); fclose(fp);
+        }
 
         k_icondir* pd = data;
         k_icondirentry* pe = pd->entry; hx = pe->hot_x; hy = pe->hot_y;
         BITMAPINFOHEADER* pbmp = (BITMAPINFOHEADER*)(pe->offset+(BYTE*)data);
 
-        if(pd->type!=2||pd->count!=1||pe->width!=32||pe->height!=32||pbmp->biBitCount!=8)
-            { k_printf("not supported cursor (%dx%d %dbpp)\n",pe->width,pe->height,pbmp->biBitCount); return 0; }
+        if(pd->type!=2||pd->count!=1||pe->width!=32||pe->height!=32)
+            { k_printf("not supported cursor (%dx%d)\n",pe->width,pe->height); return 0; }
 
         DWORD* ppal = (DWORD*)(pe->offset+pbmp->biSize+(BYTE*)data);
-        DWORD clrs = pbmp->biClrUsed!=0 ? pbmp->biClrUsed : 1<<pbmp->biBitCount,i,j,k,g[256],c1,c2,n1=0,n2=0;
-        BYTE* pi = (BYTE*)(ppal+clrs),*p; memset(g,0,sizeof(g));
+        DWORD clrs = pbmp->biClrUsed!=0 || pbmp->biBitCount>8 ? pbmp->biClrUsed : 1<<pbmp->biBitCount;
+        BYTE* pi = (BYTE*)(ppal+clrs),*p;
         switch(pbmp->biBitCount)
         {
         case 8:
@@ -1088,15 +1119,35 @@ DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param)
                 if(g[c]>n1) n1 = g[c1=c]; else
                     if(g[c]>n2) n2 = g[c2=c];
             }
-            C2XC(c1,bk); C2XC(c2,fg); p=pi+32*32;
+            C2XC(ppal[c1],bk); C2XC(ppal[c2],fg); p=pi+32*32;
             for(i=0; i<32; ++i)
             {
                 for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if(pi[i*32+j]==c2) n2|=n1;
                 pimg[31-i] = n2;
-                for(j=0,n1=1,c1=0; j<4; ++j,++p) for(k=0,n2=*p; k<8; ++k,n1<<=1,n2<<=1) if((n2&0x80)==0) c1|=n1;
-                pmask[31-i] = c1;
+                for(j=0,n1=1,n2=0; j<4; ++j,++p) for(k=0,c1=*p; k<8; ++k,n1<<=1,c1<<=1) if((c1&0x80)==0) n2|=n1;
+                pmask[31-i] = n2;
             }
             break;
+        case 16: LDR(*(WORD*),2) break;
+        case 24: LDR(0xFFFFFF&*(DWORD*),3) break;
+        case 32: LDR(*(DWORD*),4) break;
+        default:
+            memset(pimg,0xFF,sizeof(pimg));
+            memset(pmask,0xFF,sizeof(pmask));
+            break;
+        }
+        if(load_type==0) free(data);
+    }
+    else if(load_type==2)
+    {
+        BYTE* pi = user_pb(addr);
+        FNDCOL(0xFFFFFF&*(DWORD*),4)
+        for(i=0; i<32; ++i)
+        {
+            for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if((0xFFFFFF&*(DWORD*)&pi[(i*32+j)*4])==gc[c2]) n2|=n1;
+            pimg[i] = n2;
+            for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if((pi[(i*32+j)*4+3])!=0) n2|=n1;
+            pmask[i] = n2;
         }
     }
     else
