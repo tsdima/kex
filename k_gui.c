@@ -766,8 +766,7 @@ void k_process_event(k_context* ctx)
         case ConfigureNotify:
             if (ev.xconfigure.window == win && (ev.xconfigure.width>1 || ev.xconfigure.height>1))
             {
-                ctx->window_x = ev.xconfigure.x;
-                ctx->window_y = ev.xconfigure.y;
+                XTranslateCoordinates(display,win,RootWindow(display,0),0,0,&ctx->window_x,&ctx->window_y,&ev.xconfigure.window);
                 ctx->window_w = ev.xconfigure.width;
                 ctx->window_h = ev.xconfigure.height;
                 ctx->mouse_x = kernel_mem()->mouse_x - ctx->window_x;
