@@ -1061,34 +1061,29 @@ typedef struct
 } k_icondir;
 #pragma pack(pop)
 
-#define C2XC(c,xc) xc.blue = 0x101*((c)&255); xc.green = 0x101*(((c)>>8)&255); xc.red = 0x101*(((c)>>16)&255);
-
-#define FNDCOL(t,s) \
-    for(i=0; i<32*32; ++i) \
-    { \
-        DWORD c = t&pi[i*s]; \
-        for(j=0; j<256 && g[j]!=0 && gc[j]!=c; ++j); \
-        if(j>=256) break; if(g[j]==0) gc[j] = c; g[j]++; \
-        if(g[j]>n1) n1 = g[c1=j]; else \
-            if(g[j]>n2) n2 = g[c2=j]; \
-    } \
-    C2XC(gc[c1],bk); C2XC(gc[c2],fg);
-
-#define LDR(t,s) FNDCOL(t,s) \
-    p=pi+32*32*s; \
-    for(i=0; i<32; ++i) \
-    { \
-        for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if((t&pi[(i*32+j)*s])==gc[c2]) n2|=n1; \
-        pimg[31-i] = n2; \
-        for(j=0,n1=1,n2=0; j<4; ++j,++p) for(k=0,c1=*p; k<8; ++k,n1<<=1,c1<<=1) if((c1&0x80)==0) n2|=n1; \
-        pmask[31-i] = n2; \
-    }
+#define LDR(c,s) \
+    for(i=0,p=pi+32*32*s; i<32; ++i) for(j=0; j<4; ++j) for(k=0,m=*p++; k<8; ++k,m<<=1,pi+=s) \
+        bmp[31-i][j*8+k] = (0xFFFFFF&c)|(m&0x80?0:0xFF000000);
 
 DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param)
 {
     WORD load_type = param, hx = (param>>24)&255, hy = (param>>16)&255;
-    XColor fg={0,0,0,0},bk={0,0xFFFF,0xFFFF,0xFFFF}; DWORD pimg[32],pmask[32];
-    DWORD i,j,k,g[256],gc[256],c1,c2,n1=0,n2=0; memset(g,0,sizeof(g));
+    DWORD bmp[32][32],i,j,k,m;
+
+    XImage image; memset(&image, 0, sizeof(image));
+    image.width = 32;
+    image.height = 32;
+    image.depth = 32;
+    image.bits_per_pixel = 32;
+    image.format = ZPixmap;
+    image.byte_order = LSBFirst;
+    image.bitmap_unit = 8;
+    image.bitmap_bit_order = LSBFirst;
+    image.bytes_per_line = 32*4;
+    image.red_mask = 0xff;
+    image.green_mask = 0xff00;
+    image.blue_mask = 0xff0000;
+
     if(load_type<=1)
     {
         void* data = user_mem(addr);
@@ -1096,8 +1091,8 @@ DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param)
         {
             char fname[512]; k_parse_name(ctx, data, 0, fname, sizeof(fname));
             FILE* fp = fopen(fname, "rb"); if(fp==NULL) return 0;
-            fseek(fp, 0, SEEK_END); i = ftell(fp); fseek(fp, 0, SEEK_SET);
-            data = malloc(i); fread(data, 1, i, fp); fclose(fp);
+            fseek(fp, 0, SEEK_END); DWORD size = ftell(fp); fseek(fp, 0, SEEK_SET);
+            data = malloc(size); fread(data, 1, size, fp); fclose(fp);
         }
 
         k_icondir* pd = data;
@@ -1112,55 +1107,36 @@ DWORD k_cursor_load(k_context* ctx, DWORD addr, DWORD param)
         BYTE* pi = (BYTE*)(ppal+clrs),*p;
         switch(pbmp->biBitCount)
         {
-        case 8:
-            for(i=0; i<32*32; ++i)
-            {
-                BYTE c = pi[i]; g[c]++;
-                if(g[c]>n1) n1 = g[c1=c]; else
-                    if(g[c]>n2) n2 = g[c2=c];
-            }
-            C2XC(ppal[c1],bk); C2XC(ppal[c2],fg); p=pi+32*32;
-            for(i=0; i<32; ++i)
-            {
-                for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if(pi[i*32+j]==c2) n2|=n1;
-                pimg[31-i] = n2;
-                for(j=0,n1=1,n2=0; j<4; ++j,++p) for(k=0,c1=*p; k<8; ++k,n1<<=1,c1<<=1) if((c1&0x80)==0) n2|=n1;
-                pmask[31-i] = n2;
-            }
-            break;
-        case 16: LDR(*(WORD*),2) break;
-        case 24: LDR(0xFFFFFF&*(DWORD*),3) break;
-        case 32: LDR(*(DWORD*),4) break;
-        default:
-            memset(pimg,0xFF,sizeof(pimg));
-            memset(pmask,0xFF,sizeof(pmask));
-            break;
+        case 1: LDR(ppal[((k&7)==7?*pi++:*pi>>(7-k))&1],1/8); break;
+        case 4: LDR(ppal[((k&1)==1?*pi++:*pi>>4)&15],1/2); break;
+        case 8: LDR(ppal[*pi],1); break;
+        case 24: LDR(*(DWORD*)pi,3); break;
+        case 32: LDR(*(DWORD*)pi,4); break;
+        default: for(i=0; i<32*32; ++i) bmp[0][i] = 0x80000000; break;
         }
         if(load_type==0) free(data);
+        image.data = (char*)bmp;
     }
     else if(load_type==2)
     {
-        BYTE* pi = user_pb(addr);
-        FNDCOL(0xFFFFFF&*(DWORD*),4)
-        for(i=0; i<32; ++i)
-        {
-            for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if((0xFFFFFF&*(DWORD*)&pi[(i*32+j)*4])==gc[c2]) n2|=n1;
-            pimg[i] = n2;
-            for(j=0,n1=1,n2=0; j<32; ++j,n1<<=1) if((pi[(i*32+j)*4+3])!=0) n2|=n1;
-            pmask[i] = n2;
-        }
+        image.data = user_mem(addr);
     }
     else
     {
         k_printf("not supported cursor loading type (%d)\n", load_type); return 0;
     }
-    Colormap cmap = DefaultColormap(display, 0);
-    XAllocColor(display, cmap, &fg);
-    XAllocColor(display, cmap, &bk);
-    Pixmap img = XCreatePixmapFromBitmapData(display, RootWindow(display, 0), (char*)pimg, 32,32, 1,0, 1);
-    Pixmap mask = XCreatePixmapFromBitmapData(display, RootWindow(display, 0), (char*)pmask, 32,32, 1,0, 1);
-    Cursor cur = XCreatePixmapCursor(display, img, mask, &fg, &bk, hx, hy);
-    XFreePixmap(display, img); XFreePixmap(display, mask);
+
+    Pixmap pm = XCreatePixmap(display, RootWindow(display, 0), 32, 32, 32);
+    GC gc = XCreateGC(display, pm, 0, NULL);
+    XPutImage(display, pm, gc, &image, 0, 0, 0, 0, 32, 32);
+    XFreeGC(display, gc);
+    
+    Picture p = XRenderCreatePicture(display, pm, XRenderFindStandardFormat(display, PictStandardARGB32), 0, NULL);
+    XFreePixmap(display, pm);
+
+    Cursor cur = XRenderCreateCursor(display, p, hx, hy);
+    XRenderFreePicture(display, p);
+
     return cur;
 }
 
