@@ -29,6 +29,9 @@ int modify_ldt(int func, void* ptr, unsigned long bytecount);
 #define CLIPBOARD_SHMEM "/kolibri.clip.%d"
 #define CLIPBOARD_BASE (void*)0xC2000000
 
+#define TLS_BASE 0x80000000L
+#define TLS_SIZE 0x40000000L
+
 #define APP_SHMEM "/kolibri.app.%d"
 #define KEX_BASE 0x40000000L
 
@@ -45,6 +48,7 @@ int modify_ldt(int func, void* ptr, unsigned long bytecount);
 KERNEL_MEM* k_kernel_mem = NULL;
 
 BYTE* k_base = NULL; DWORD k_base_size = 0, k_shmid = 0;
+BYTE* k_tls_base = NULL; DWORD k_tls_size = 0x1000;
 BYTE* k_heap_map = NULL; DWORD k_heap_map_size;
 BYTE* k_skin_data = NULL; DWORD k_skin_size;
 BYTE* k_stub = NULL;
@@ -112,9 +116,11 @@ void k_modify_ldt()
 {
     struct user_desc ldt_code = {1, (unsigned long)k_base, KEX_BASE>>12, 1, MODIFY_LDT_CONTENTS_CODE, 0, 1, 0, 1};
     struct user_desc ldt_data = {2, (unsigned long)k_base, KEX_BASE>>12, 1, MODIFY_LDT_CONTENTS_DATA, 0, 1, 0, 1};
+    struct user_desc ldt_tls  = {3, (unsigned long)k_tls_base, TLS_SIZE>>12, 1, MODIFY_LDT_CONTENTS_DATA, 0, 1, 0, 1};
 
     modify_ldt(1, &ldt_code, sizeof(ldt_code));
     modify_ldt(1, &ldt_data, sizeof(ldt_data));
+    modify_ldt(1, &ldt_tls, sizeof(ldt_tls));
 }
 
 void k_kernel_mem_open()
@@ -148,6 +154,7 @@ void k_mem_init(int shmid)
     k_shmid = shmid;
     k_kernel_mem_open();
     k_stub = (BYTE*)mmap(STUB_MEM_BASE, STUB_MEM_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, 0, 0);
+    k_tls_base = (BYTE*)mmap((void*)TLS_BASE, k_tls_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, 0, 0);
 }
 
 void k_mem_done(int shmid)
@@ -524,3 +531,28 @@ DWORD k_stub_jmp(DWORD eip, DWORD esp)
     *(DWORD*)(k_stub+6) = eip - 0x3FFFF00A;
     return 0x3FFFF000;
 }
+
+#ifdef __x86_64__
+
+QWORD __k_fsbase;
+
+#include <asm/prctl.h>
+
+int arch_prctl(int code, ...);
+
+void k_save_fsbase()
+{
+    arch_prctl(ARCH_GET_FS, &__k_fsbase);
+}
+
+void k_load_fsbase()
+{
+    arch_prctl(ARCH_SET_FS, __k_fsbase);
+}
+
+void k_set_fsbase()
+{
+    arch_prctl(ARCH_SET_FS, (QWORD)TLS_BASE);
+}
+
+#endif

@@ -243,6 +243,7 @@ void k_exec(k_context* ctx, char* kexfile, char* args)
 void k_start_thread(DWORD eip, DWORD esp)
 {
 #ifdef __x86_64__
+    k_set_fsbase();
      __asm__ __volatile__ (
         "mov $0x17, %%ax\n"
         "mov %%ax, %%ds\n"
@@ -259,6 +260,8 @@ void k_start_thread(DWORD eip, DWORD esp)
         "mov %ax, %ds\n"
         "mov %ax, %es\n"
         "mov %ax, %ss\n"
+        "mov $0x1f, %ax\n"
+        "mov %ax, %fs\n"
         "jmp $0x0f, $0x3FFFF000\n"
     );
 #endif

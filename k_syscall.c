@@ -264,6 +264,9 @@ DWORD k_send_event(DWORD type, DWORD param)
 
 void OnSigSegv(int sig, siginfo_t* info, void* extra)
 {
+#ifdef __x86_64__
+    k_load_fsbase();
+#endif
     greg_t* gregs = ((struct ucontext*)extra)->uc_mcontext.gregs; DWORD slot = k_get_slot();
     DWORD* eax = (DWORD*)&R_AX;
     DWORD* ebx = (DWORD*)&R_BX;
@@ -594,7 +597,12 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
             {
                 printf("%02X.%08X: mcall %d, 0x%X, 0x%X, 0x%X\n", slot, (DWORD)R_IP, f_nr, *ebx, *ecx, *edx);
             }
+#ifdef __x86_64__
             R_IP = k_stub_resume(R_IP+2);
+            k_set_fsbase();
+#else
+            R_IP += 2;
+#endif
             return;
         }
     }
@@ -626,6 +634,10 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
 
 void k_syscall_init()
 {
+#ifdef __x86_64__
+    k_save_fsbase();
+#endif
+
     struct sigaltstack altstack;
     struct sigaction sigsegv_action;
 

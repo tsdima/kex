@@ -150,3 +150,7 @@ DWORD k_clipboard_remove_last();
 
 DWORD k_stub_resume(DWORD eip);
 DWORD k_stub_jmp(DWORD eip, DWORD esp);
+
+void k_save_fsbase();
+void k_load_fsbase();
+void k_set_fsbase();
