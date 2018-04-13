@@ -94,7 +94,8 @@ char* k_parse_item(k_context* ctx, BYTE* name, int cp, char* buf, char* ebuf)
 {
     if(*name=='/')
     {
-        name += cp==2?2:1;
+        if(name[1]>=1 && name[1]<=3) { cp = name[1]; name+=2; }
+        if(*name=='/') name += cp==2?2:1;
         switch(is_key(&name))
         {
         case 1: buf = k_parse_item(ctx, (BYTE*)"/RD/1/", cp, buf, ebuf); break;

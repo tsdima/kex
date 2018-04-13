@@ -114,7 +114,7 @@ DWORD k_net_socket(k_context* ctx, BYTE func, DWORD* ebx, DWORD ecx, DWORD edx, 
     case 4: ret = connect(ecx, user_mem(edx), esi); break;
     case 5: ret = accept(ecx, user_mem(edx), &esi); break;
     case 6: ret = send(ecx, user_mem(edx), esi, edi); break;
-    case 7: ret = recv(ecx, user_mem(edx), esi, edi); break;
+    case 7: ret = recv(ecx, user_mem(edx), esi, edi); if(ret==-1 && (edi&MSG_DONTWAIT)!=0) err=6; break;
     case 8: p = user_pd(edx); ret = getsockopt(ecx, p[0], p[1], p+3, p+2); break;
     case 9: p = user_pd(edx); ret = setsockopt(ecx, p[0], p[1], p+3, p[2]); break;
     case 10: ret = socketpair(AF_LOCAL, SOCK_STREAM, 0, pair); if(ret!=-1) { ret = pair[0]; *ebx = pair[1]; } break;

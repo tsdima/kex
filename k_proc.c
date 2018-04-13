@@ -213,7 +213,7 @@ DWORD k_load_dll(k_context* ctx, BYTE* name, int cp)
 
 void k_exec(k_context* ctx, char* kexfile, char* args)
 {
-    KEX_FILE_HDR* hdr = (KEX_FILE_HDR*)k_load(ctx, (BYTE*)kexfile, 0, k_mem_alloc, NULL, NULL);
+    KEX_FILE_HDR* hdr = (KEX_FILE_HDR*)k_load(ctx, (BYTE*)kexfile, 3, k_mem_alloc, NULL, NULL);
     ctx->memsize = k_mem_get_size();
 
     if(hdr != NULL && memcmp(hdr->magic,"MENUET0",7) == 0)
@@ -224,7 +224,7 @@ void k_exec(k_context* ctx, char* kexfile, char* args)
             esp = hdr->u.menuet.stack_pos;
             if(hdr->u.menuet.path_buf!=0)
             {
-                char* path_buf = (char*)user_mem(hdr->u.menuet.path_buf);
+                char* path_buf = (char*)user_mem(hdr->u.menuet.path_buf); *path_buf++='/'; *path_buf++=3;
                 if(*kexfile!='/') { strcpy(path_buf, "/sys/"); path_buf+=5; }
                 strcpy(path_buf, kexfile);
             }
