@@ -20,27 +20,28 @@ int modify_ldt(int func, void* ptr, unsigned long bytecount);
 #define HTAG_PARAM  0x80
 
 #define KERNEL_SHMEM "/kolibri.kmem"
-#define KERNEL_MEM_BASE (void*)0xC0000000
+#define KERNEL_MEM_BASE (void*)0x10000000
 #define KERNEL_MEM_SIZE ((sizeof(KERNEL_MEM)+0xFFF)&-0x1000)
 
 #define SKIN_SHMEM "/kolibri.skin"
-#define SKIN_BASE (void*)0xC1000000
+#define SKIN_BASE (void*)0x11000000
+
+#define TLS_BASE (void*)0x11FFF000L
+#define TLS_SIZE 0x1000
 
 #define CLIPBOARD_SHMEM "/kolibri.clip.%d"
-#define CLIPBOARD_BASE (void*)0xC2000000
-
-#define TLS_BASE 0x80000000L
-#define TLS_SIZE 0x40000000L
-
-#define APP_SHMEM "/kolibri.app.%d"
-#define KEX_BASE 0x40000000L
-
-#define STUB_MEM_BASE (void*)0x7FFFF000
-#define STUB_MEM_SIZE 0x1000
+#define CLIPBOARD_BASE (void*)0x12000000
 
 #define HCTRL_SHMEM "/kolibri.heap.%d"
-#define HCTRL_MEM_BASE (void*)0x3FFC0000
+#define HCTRL_MEM_BASE (void*)0x1FFC0000
 #define HCTRL_MEM_MAXSIZE 0x40000
+
+#define APP_SHMEM "/kolibri.app.%d"
+#define KEX_BASE (void*)0x20000000L
+#define KEX_SIZE 0x40000000L
+
+#define STUB_MEM_BASE (void*)0x5FFFF000
+#define STUB_MEM_SIZE 0x1000
 
 #define USER_SHMEM "/kolibri.usm.%d"
 #define USER_SHMEM_START 0x3F000000
@@ -48,10 +49,9 @@ int modify_ldt(int func, void* ptr, unsigned long bytecount);
 KERNEL_MEM* k_kernel_mem = NULL;
 
 BYTE* k_base = NULL; DWORD k_base_size = 0, k_shmid = 0;
-BYTE* k_tls_base = NULL; DWORD k_tls_size = 0x1000;
 BYTE* k_heap_map = NULL; DWORD k_heap_map_size;
 BYTE* k_skin_data = NULL; DWORD k_skin_size;
-BYTE* k_stub = NULL;
+BYTE* k_stub = NULL; BYTE* k_tls_base = NULL;
 
 char _init_keyboard_layout[3][128]={
     "6\x1B"
@@ -114,8 +114,8 @@ void k_shmem_unlink(char* name, int shmid)
 
 void k_modify_ldt()
 {
-    struct user_desc ldt_code = {1, (unsigned long)k_base, KEX_BASE>>12, 1, MODIFY_LDT_CONTENTS_CODE, 0, 1, 0, 1};
-    struct user_desc ldt_data = {2, (unsigned long)k_base, KEX_BASE>>12, 1, MODIFY_LDT_CONTENTS_DATA, 0, 1, 0, 1};
+    struct user_desc ldt_code = {1, (unsigned long)k_base, KEX_SIZE>>12, 1, MODIFY_LDT_CONTENTS_CODE, 0, 1, 0, 1};
+    struct user_desc ldt_data = {2, (unsigned long)k_base, KEX_SIZE>>12, 1, MODIFY_LDT_CONTENTS_DATA, 0, 1, 0, 1};
     struct user_desc ldt_tls  = {3, (unsigned long)k_tls_base, TLS_SIZE>>12, 1, MODIFY_LDT_CONTENTS_DATA, 0, 1, 0, 1};
 
     modify_ldt(1, &ldt_code, sizeof(ldt_code));
@@ -139,6 +139,12 @@ void k_kernel_mem_init()
     k_kernel_mem->pci_enabled = 1;
 }
 
+void k_kernel_mem_cleanup()
+{
+    k_shmem_unlink(KERNEL_SHMEM, k_shmid);
+    k_shmem_unlink(SKIN_SHMEM, k_shmid);
+}
+
 KERNEL_MEM* kernel_mem()
 {
     return k_kernel_mem;
@@ -154,7 +160,7 @@ void k_mem_init(int shmid)
     k_shmid = shmid;
     k_kernel_mem_open();
     k_stub = (BYTE*)mmap(STUB_MEM_BASE, STUB_MEM_SIZE, PROT_READ|PROT_WRITE|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, 0, 0);
-    k_tls_base = (BYTE*)mmap((void*)TLS_BASE, k_tls_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, 0, 0);
+    k_tls_base = (BYTE*)mmap(TLS_BASE, TLS_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, 0, 0);
 }
 
 void k_mem_done(int shmid)
@@ -165,7 +171,7 @@ void k_mem_done(int shmid)
 
 void k_mem_reopen()
 {
-    k_base = k_shmem_open(APP_SHMEM, k_shmid, (void*)KEX_BASE, 0, PROT_EXEC, &k_base_size);
+    k_base = k_shmem_open(APP_SHMEM, k_shmid, KEX_BASE, 0, PROT_EXEC, &k_base_size);
     k_heap_map = (BYTE*)k_shmem_open(HCTRL_SHMEM, k_shmid, HCTRL_MEM_BASE, 0, 0, &k_heap_map_size);
     k_modify_ldt();
 }
@@ -178,7 +184,7 @@ void* k_mem_alloc(DWORD size)
 
     if (k_base == NULL)
     {
-        ptr = k_shmem_open(APP_SHMEM, k_shmid, (void*)KEX_BASE, size, PROT_EXEC, NULL);
+        ptr = k_shmem_open(APP_SHMEM, k_shmid, KEX_BASE, size, PROT_EXEC, NULL);
         if(ptr != MAP_FAILED) memset(ptr, 0, size);
     }
     else
@@ -444,10 +450,10 @@ DWORD k_usm_open(k_context* ctx, DWORD aname, DWORD size, DWORD flags, DWORD* ad
         if((USM_WRITE&flags&~usm[id].flags)!=0) return 10;
     }
     for(i=0; i<MAX_USM; ++i) if(ctx->usm_addr[i]!=0 && ctx->usm_addr[i]+ctx->usm_size[i]>top) top = ctx->usm_addr[i]+ctx->usm_size[i];
-    BYTE* ptr = top+(BYTE*)KEX_BASE; size = ((size-1)|0xFFF)+1;
+    BYTE* ptr = top+k_base; size = ((size-1)|0xFFF)+1;
     ptr = k_shmem_open(USER_SHMEM, id, ptr, size, 0, (flags&(USM_CREATE|USM_OPEN_ALWAYS))!=0 ? NULL : &size);
     ctx->usm_size[id] = size;
-    ctx->usm_addr[id] = *addr = ptr-(BYTE*)KEX_BASE;
+    ctx->usm_addr[id] = *addr = ptr-k_base;
     usm[id].tcount++;
     if(clr) memset(ptr, 0, size);
     return 0;

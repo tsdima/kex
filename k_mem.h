@@ -110,6 +110,7 @@ void k_printf(char* fmt, ...);
 void k_panic(char* msg);
 
 void k_kernel_mem_init();
+void k_kernel_mem_cleanup();
 KERNEL_MEM* kernel_mem();
 
 #define g_slot kernel_mem()->slot

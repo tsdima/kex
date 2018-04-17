@@ -229,5 +229,6 @@ int main(int argc, char **argv)
     }
     close(svr);
     unlink(SOCK_FILE);
+    k_kernel_mem_cleanup();
     return 0;
 }
