@@ -30,17 +30,18 @@ const k_nmcli_line nmcli_lines[] = {
 
 #define NMP(n) nm->ofs[n]+(BYTE*)nm->data
 
-void k_nmcli_call()
+int k_nmcli_call(const char* cmd)
 {
     char line[512],*p; const k_nmcli_line* nm;
-    FILE* fp = popen("nmcli d list", "r"); if(!fp) return;
+    int ret = 1; FILE* fp = popen(cmd, "r"); if(!fp) return 1;
     while(fgets(line, sizeof(line), fp))
     {
         p = strchr(line,':'); if(!p) continue; else *p++ = 0;
         for(nm = nmcli_lines; nm->id && strcmp(line, nm->id); ++nm);
-        if(nm->id) sscanf(p, nm->fmt, NMP(0), NMP(1), NMP(2), NMP(3), NMP(4), NMP(5), NMP(6), NMP(7), NMP(8));
+        if(nm->id && sscanf(p, nm->fmt, NMP(0), NMP(1), NMP(2), NMP(3), NMP(4), NMP(5), NMP(6), NMP(7), NMP(8))>0) ret = 0;
     }
     fclose(fp);
+    return ret;
 }
 
 k_timespec k_net_update_timeout;
@@ -53,7 +54,7 @@ void k_net_update()
     KERNEL_MEM* km = kernel_mem();
     if(km->if_count==0)
     {
-        k_nmcli_call();
+        if(k_nmcli_call("nmcli d show 2>/dev/null")) k_nmcli_call("nmcli d list 2>/dev/null");
         struct ifaddrs *ifap = NULL,*p; getifaddrs(&ifap);
         for(p=ifap; p!=NULL; p=p->ifa_next) if(p->ifa_addr!=NULL && p->ifa_addr->sa_family==AF_INET)
         {

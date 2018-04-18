@@ -362,6 +362,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 4: *eax = 1<<30; break; // CPU idle clocks
                 case 5: *eax = 1<<30; break; // CPU clock
                 case 7: *eax = km->active_slot; break;
+                case 14: *eax = 0; break; // TODO: wait VRTC
                 case 16: *eax = 1<<19; break; // RAM size free KB
                 case 17: *eax = 1<<20; break; // RAM size total KB
                 case 18: x = k_find_slot(*ecx); if(x==0) *eax=-1; else { *eax=0; k_kill_by_slot(x); } break;
