@@ -24,6 +24,7 @@ DWORD k_if_dns[2];
 const k_nmcli_line nmcli_lines[] = {
     {"GENERAL.HWADDR", "%x:%x:%x:%x:%x:%x", k_if_hwaddr, {0,1,2,3,4,5}},
     {"IP4.ADDRESS[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,4,4,5,6,7}},
+    {"IP4.АДРЕС[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,4,4,5,6,7}},
     {"IP4.DNS[1]", "%d.%d.%d.%d", k_if_dns, {0,1,2,3}},
     {NULL}
 };
