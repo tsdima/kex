@@ -13,41 +13,48 @@ typedef struct
 {
     const char* id;
     const char* fmt;
-    void* data;
     int ofs[9];
 } k_nmcli_line;
 
-BYTE k_if_hwaddr[10];
-DWORD k_if_ip[3];
-DWORD k_if_dns[2];
+#define MAX_IF_COUNT 4
+#define k_if_hwaddr(i) k_if_data[i]
+#define k_if_ip(i) *(DWORD*)&k_if_data[i][10]
+#define k_if_gw(i) *(DWORD*)&k_if_data[i][14]
+#define k_if_dns(i) *(DWORD*)&k_if_data[i][22]
+
+BYTE k_if_data[MAX_IF_COUNT][30];
 
 const k_nmcli_line nmcli_lines[] = {
-    {"GENERAL.HWADDR", "%x:%x:%x:%x:%x:%x", k_if_hwaddr, {0,1,2,3,4,5}},
-    {"GENERAL.АППАРАТНЫЙ АДРЕС", "%x:%x:%x:%x:%x:%x", k_if_hwaddr, {0,1,2,3,4,5}},
-    {"IP4.ADDRESS[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,8,4,5,6,7}},
-    {"IP4.АДРЕС[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,8,4,5,6,7}},
-    {"IP4.ADDRESS[1]", "%d.%d.%d.%d/%d", k_if_ip, {0,1,2,3,8}},
-    {"IP4.АДРЕС[1]", "%d.%d.%d.%d/%d", k_if_ip, {0,1,2,3,8}},
-    {"IP4.GATEWAY", "%d.%d.%d.%d", k_if_ip, {4,5,6,7}},
-    {"IP4.ШЛЮЗ", "%d.%d.%d.%d", k_if_ip, {4,5,6,7}},
-    {"IP4.DNS[1]", "%d.%d.%d.%d", k_if_dns, {0,1,2,3}},
+    {"GENERAL.HWADDR", "%x:%x:%x:%x:%x:%x", {0,1,2,3,4,5}},
+    {"GENERAL.АППАРАТНЫЙ АДРЕС", "%x:%x:%x:%x:%x:%x", {0,1,2,3,4,5}},
+    {"IP4.ADDRESS[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", {10,11,12,13,18,14,15,16,17}},
+    {"IP4.АДРЕС[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", {10,11,12,13,18,14,15,16,17}},
+    {"IP4.ADDRESS[1]", "%d.%d.%d.%d/%d", {10,11,12,13,18}},
+    {"IP4.АДРЕС[1]", "%d.%d.%d.%d/%d", {10,11,12,13,18}},
+    {"IP4.GATEWAY", "%d.%d.%d.%d", {14,15,16,17}},
+    {"IP4.ШЛЮЗ", "%d.%d.%d.%d", {14,15,16,17}},
+    {"IP4.DNS[1]", "%d.%d.%d.%d", {22,23,24,25}},
     {NULL}
 };
 
-#define NMP(n) nm->ofs[n]+(BYTE*)nm->data
+#define NMP(n) nm->ofs[n]+k_if_data[i]
 
 int k_nmcli_call(const char* cmd)
 {
     char line[512],*p; const k_nmcli_line* nm;
-    int ret = 1; FILE* fp = popen(cmd, "r"); if(!fp) return 1;
-    while(fgets(line, sizeof(line), fp))
+    int i,ret = 1; FILE* fp = popen(cmd, "r"); if(!fp) return 1;
+    for(i=-1; i<MAX_IF_COUNT && fgets(line, sizeof(line), fp);)
     {
         p = strchr(line,':'); if(!p) continue; else *p++ = 0;
         for(nm = nmcli_lines; nm->id; ++nm)
         {
-            if(strcmp(line, nm->id)==0 && sscanf(p, nm->fmt, NMP(0), NMP(1), NMP(2), NMP(3), NMP(4), NMP(5), NMP(6), NMP(7), NMP(8))>0)
+            if(strcmp(line, nm->id)==0)
             {
-                ret = 0; break;
+                if(nm<nmcli_lines+2) if(++i>=MAX_IF_COUNT) break;
+                if(sscanf(p, nm->fmt, NMP(0), NMP(1), NMP(2), NMP(3), NMP(4), NMP(5), NMP(6), NMP(7), NMP(8))>0)
+                {
+                    ret = 0; break;
+                }
             }
         }
     }
@@ -69,18 +76,19 @@ void k_net_update()
         struct ifaddrs *ifap = NULL,*p; getifaddrs(&ifap);
         for(p=ifap; p!=NULL; p=p->ifa_next) if(p->ifa_addr!=NULL && p->ifa_addr->sa_family==AF_INET)
         {
-            struct sockaddr_in ip,mask; DWORD i = km->if_count++;
+            struct sockaddr_in ip,mask; DWORD i = km->if_count++,j;
             ip = *(struct sockaddr_in*)p->ifa_addr;
             mask = *(struct sockaddr_in*)p->ifa_netmask;
             strcpy(km->if_name[i], p->ifa_name);
             km->if_ip[i] = ip.sin_addr.s_addr;
             km->if_mask[i] = mask.sin_addr.s_addr;
-            if(ip.sin_addr.s_addr==k_if_ip[0])
+            for(j=0; j<MAX_IF_COUNT; ++j) if(ip.sin_addr.s_addr==k_if_ip(j))
             {
-                km->if_mac_hi[i] = *(WORD*)k_if_hwaddr;
-                km->if_mac_lo[i] = *(DWORD*)(k_if_hwaddr+2);
-                km->if_gateway[i] = k_if_ip[1];
-                km->if_dns[i] = k_if_dns[0];
+                km->if_mac_hi[i] = *(WORD*)k_if_hwaddr(j);
+                km->if_mac_lo[i] = *(DWORD*)(k_if_hwaddr(j)+2);
+                km->if_gateway[i] = k_if_gw(j);
+                km->if_dns[i] = k_if_dns(j);
+                break;
             }
         }
         if(ifap) freeifaddrs(ifap);
