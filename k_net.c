@@ -29,6 +29,7 @@ const k_nmcli_line nmcli_lines[] = {
     {"IP4.ADDRESS[1]", "%d.%d.%d.%d/%d", k_if_ip, {0,1,2,3,8}},
     {"IP4.АДРЕС[1]", "%d.%d.%d.%d/%d", k_if_ip, {0,1,2,3,8}},
     {"IP4.GATEWAY", "%d.%d.%d.%d", k_if_ip, {4,5,6,7}},
+    {"IP4.ШЛЮЗ", "%d.%d.%d.%d", k_if_ip, {4,5,6,7}},
     {"IP4.DNS[1]", "%d.%d.%d.%d", k_if_dns, {0,1,2,3}},
     {NULL}
 };
