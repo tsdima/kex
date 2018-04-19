@@ -23,8 +23,12 @@ DWORD k_if_dns[2];
 
 const k_nmcli_line nmcli_lines[] = {
     {"GENERAL.HWADDR", "%x:%x:%x:%x:%x:%x", k_if_hwaddr, {0,1,2,3,4,5}},
-    {"IP4.ADDRESS[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,4,4,5,6,7}},
-    {"IP4.АДРЕС[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,4,4,5,6,7}},
+    {"GENERAL.АППАРАТНЫЙ АДРЕС", "%x:%x:%x:%x:%x:%x", k_if_hwaddr, {0,1,2,3,4,5}},
+    {"IP4.ADDRESS[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,8,4,5,6,7}},
+    {"IP4.АДРЕС[1]", " ip = %d.%d.%d.%d/%d, gw = %d.%d.%d.%d", k_if_ip, {0,1,2,3,8,4,5,6,7}},
+    {"IP4.ADDRESS[1]", "%d.%d.%d.%d/%d", k_if_ip, {0,1,2,3,8}},
+    {"IP4.АДРЕС[1]", "%d.%d.%d.%d/%d", k_if_ip, {0,1,2,3,8}},
+    {"IP4.GATEWAY", "%d.%d.%d.%d", k_if_ip, {4,5,6,7}},
     {"IP4.DNS[1]", "%d.%d.%d.%d", k_if_dns, {0,1,2,3}},
     {NULL}
 };
@@ -38,8 +42,13 @@ int k_nmcli_call(const char* cmd)
     while(fgets(line, sizeof(line), fp))
     {
         p = strchr(line,':'); if(!p) continue; else *p++ = 0;
-        for(nm = nmcli_lines; nm->id && strcmp(line, nm->id); ++nm);
-        if(nm->id && sscanf(p, nm->fmt, NMP(0), NMP(1), NMP(2), NMP(3), NMP(4), NMP(5), NMP(6), NMP(7), NMP(8))>0) ret = 0;
+        for(nm = nmcli_lines; nm->id; ++nm)
+        {
+            if(strcmp(line, nm->id)==0 && sscanf(p, nm->fmt, NMP(0), NMP(1), NMP(2), NMP(3), NMP(4), NMP(5), NMP(6), NMP(7), NMP(8))>0)
+            {
+                ret = 0; break;
+            }
+        }
     }
     fclose(fp);
     return ret;
