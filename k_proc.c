@@ -189,10 +189,12 @@ void* k_load(k_context* ctx, BYTE* name, int cp, void*(*_mem_alloc)(DWORD), DWOR
         if(unpacked) free(unpacked);
         fclose(fp);
     }
+#ifdef _DEBUG
     else
     {
         fprintf(stderr, "%s not found\n", name);
     }
+#endif
 
     return mem;
 }
