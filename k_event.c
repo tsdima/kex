@@ -118,17 +118,25 @@ k_button* k_find_button(k_context* ctx)
     return NULL;
 }
 
+void k_event_mouse(k_context* ctx)
+{
+    DWORD m = ctx->event_mask>>30;
+    if((m&2)!=0 && ctx->focused==0) return;
+    if((m&1)!=0 && (ctx->mouse_x<0||ctx->mouse_y<0||ctx->mouse_x>=ctx->window_w||ctx->mouse_y>=ctx->window_h)) return;
+    ctx->event_pending |= K_EVMASK_MOUSE;
+}
+
 void k_event_mousemove(k_context* ctx, int x, int y)
 {
     g_mouse_x = x; g_mouse_y = y;
-    ctx->event_pending |= K_EVMASK_MOUSE;
     ctx->mouse_x = x - ctx->window_x;
     ctx->mouse_y = y - ctx->window_y;
+    k_event_mouse(ctx);
 }
 
 void k_event_mousepress(k_context* ctx, DWORD button, int wheel)
 {
-    ctx->event_pending |= K_EVMASK_MOUSE;
+    k_event_mouse(ctx);
     ctx->mouse_state |= (button<<8)|button|(wheel!=0?0x8000:0);
     ctx->mouse_last_pressed = button&0xFE;
     ctx->mouse_wheel_y += wheel;
@@ -141,7 +149,7 @@ void k_event_mousepress(k_context* ctx, DWORD button, int wheel)
 
 void k_event_mouserelease(k_context* ctx, DWORD button)
 {
-    ctx->event_pending |= K_EVMASK_MOUSE;
+    k_event_mouse(ctx);
     ctx->mouse_state |= button<<16;
     ctx->mouse_state &= ~button;
     k_button* b = k_find_button(ctx);
