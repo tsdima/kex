@@ -48,6 +48,7 @@ typedef struct
     int client_y;
     int mouse_x;
     int mouse_y;
+    int mouse_wheel_y;
     int button_id_pressed;
     int button_id;
     int focused;

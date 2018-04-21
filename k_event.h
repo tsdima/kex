@@ -43,7 +43,7 @@ DWORD k_check_event(k_context* ctx);
 
 void k_event_redraw(k_context* ctx);
 void k_event_mousemove(k_context* ctx, int x, int y);
-void k_event_mousepress(k_context* ctx, DWORD button);
+void k_event_mousepress(k_context* ctx, DWORD button, int wheel);
 void k_event_mouserelease(k_context* ctx, DWORD button);
 void k_event_keypress(k_context* ctx, DWORD key);
 void k_event_network(k_context* ctx);
@@ -52,6 +52,7 @@ void k_clear_redraw(k_context* ctx);
 DWORD k_get_mousepos(k_context* ctx, int* x, int* y);
 DWORD k_get_mouse(int* x, int* y);
 DWORD k_get_mousestate(k_context* ctx);
+DWORD k_get_mousewheel(k_context* ctx);
 DWORD k_get_key(k_context* ctx);
 DWORD k_get_button(k_context* ctx);
 int k_is_dblclick(k_context* ctx);

@@ -643,8 +643,9 @@ void k_drag_window(k_context* ctx, int x, int y, int x_root, int y_root)
 
 void k_process_event(k_context* ctx)
 {
-    static DWORD btnxlat[] = {0,1,4,2,8,16}; DWORD button_id;
-    static int x, y;
+    static DWORD btnxlat[] = {0,1,4,2,0,0};
+    static int wheel[] = {0,0,0,0,-1,1};
+    static int x, y; DWORD button_id;
 
     if(XPending(display) == 0)
     {
@@ -712,7 +713,7 @@ void k_process_event(k_context* ctx)
                     k_move_size_window(ctx, ctx->orig_x, ctx->orig_y, ctx->orig_w-1, ctx->orig_h-1);
                 }
             }
-            k_event_mousepress(ctx, btnxlat[ev.xbutton.button]);
+            k_event_mousepress(ctx, btnxlat[ev.xbutton.button], wheel[ev.xbutton.button]);
             if(button_id != ctx->button_id_pressed && (ctx->button_id_pressed&KBS_NO_PRESS)==0)
             {
                 k_button* b = k_find_button_by_id(ctx, ctx->button_id_pressed);
