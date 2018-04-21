@@ -10,7 +10,7 @@ First of all you will need to install liblzma-dev:
 
     sudo apt-get install liblzma-dev
 
-If you have installed [CodeLite][2] simply open project file and build it. Or enter followed command in terminal window:
+If you have installed [CodeLite][2] simply add the project file into your (or new empty) workspace and build it. Or enter the following command in terminal window:
 
     gcc -o kex main.c k_*.c -lX11 -lXrender -lrt -llzma -D_GNU_SOURCE
 
@@ -18,7 +18,7 @@ If you have installed [CodeLite][2] simply open project file and build it. Or en
 How to use kex
 ----
 
-Make sure you have placed followed files in your home folder:
+Make sure you have placed following files in your home folder:
 
  - ~/.kex/[char.mt][3]
  - ~/.kex/[charUni.mt][4]
