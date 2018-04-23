@@ -13,8 +13,11 @@
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <signal.h>
 #include <sys/ucontext.h>
+#include <sys/syscall.h>
+#include <linux/futex.h>
 
 int base_pid = 0;
 
@@ -220,6 +223,26 @@ DWORD k_send_event(DWORD type, DWORD param)
     msg_t msg; msg_ipc_event(&msg, kernel_mem()->active_slot, type, param);
     write_msg(ipc_server, &msg);
     return 0;
+}
+
+int futex(int* uaddr, int op, int val, const struct timespec* timeout, int* uaddr2, int val3)
+{
+    return syscall(SYS_futex, uaddr, op, val, timeout, uaddr2, val3);
+}
+
+DWORD k_futex_wait(int* uaddr, int val, DWORD timeout)
+{
+    struct timespec tm;
+    tm.tv_sec = timeout/100;
+    tm.tv_nsec = (timeout%100)*10000000;
+    int ret = futex(uaddr, FUTEX_WAIT, val, timeout?&tm:NULL, NULL, 0);
+    if(ret==0) return 0;
+    return errno==ETIMEDOUT ? -1 : -2;
+}
+
+DWORD k_futex_wake(int* uaddr, int val)
+{
+    return futex(uaddr, FUTEX_WAKE, val, NULL, NULL, 0);
 }
 
 #define R_FL     gregs[REG_EFL]
@@ -586,6 +609,16 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 break;
             case 76:
                 *eax = k_net_proto(ctx, *ebx>>16, *ebx>>8, *ebx, ebx, ecx);
+                break;
+            case 77:
+                switch(*ebx)
+                {
+                case 0: *eax = *ecx; break;
+                case 1: *eax = 0; break;
+                case 2: *eax = k_futex_wait(user_mem(*ecx), *edx, *esi); break;
+                case 3: *eax = k_futex_wake(user_mem(*ecx), *edx); break;
+                default: err = 1; break;
+                }
                 break;
             case 80:
                 err = k_file_syscall(ctx, eax, ebx, 1);
