@@ -8,6 +8,7 @@ typedef unsigned long long QWORD;
 
 #define MAX_CHILD 64
 #define MAX_KEYS 120
+#define MAX_HOTKEYS 64
 #define MAX_USM 16
 #define MAX_SOCKET 32
 #define MAX_IFACE 8
@@ -30,6 +31,9 @@ typedef struct
     DWORD mouse_state;
     DWORD mouse_last_pressed;
     DWORD kbd_mode;
+    DWORD hotkey_out_pos;
+    DWORD hotkey_count;
+    DWORD hotkey_def[MAX_HOTKEYS];
     DWORD window_color;
     DWORD window_zpos_me;
     DWORD window_zpos;
@@ -71,12 +75,25 @@ typedef struct
 
 typedef struct
 {
+    char  name[32];
+    DWORD mac_lo;
+    DWORD mac_hi;
+    DWORD ip;
+    DWORD mask;
+    DWORD dns;
+    DWORD gateway;
+} k_iface;
+
+typedef struct
+{
     DWORD keyboard_modifiers;
     DWORD keyboard_country;
     DWORD keyboard_language;
     DWORD keyboard_in_pos;
     DWORD keyboard_out_pos;
     DWORD keyboard_buffer[MAX_KEYS];
+    DWORD hotkey_in_pos;
+    DWORD hotkey_buffer[MAX_KEYS];
     char keyboard_layout[3][128];
     int mouse_x;
     int mouse_y;
@@ -95,13 +112,7 @@ typedef struct
     char extfs_key[64];
     char extfs_path[64];
     DWORD if_count;
-    DWORD if_mac_lo[MAX_IFACE];
-    DWORD if_mac_hi[MAX_IFACE];
-    DWORD if_ip[MAX_IFACE];
-    DWORD if_mask[MAX_IFACE];
-    DWORD if_dns[MAX_IFACE];
-    DWORD if_gateway[MAX_IFACE];
-    char  if_name[MAX_IFACE][32];
+    k_iface iface[MAX_IFACE];
     DWORD pci_enabled;
     DWORD clipboard_count;
     BYTE debug_board[DEBUG_BOARD_LEN];

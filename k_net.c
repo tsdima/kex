@@ -79,15 +79,15 @@ void k_net_update()
             struct sockaddr_in ip,mask; DWORD i = km->if_count++,j;
             ip = *(struct sockaddr_in*)p->ifa_addr;
             mask = *(struct sockaddr_in*)p->ifa_netmask;
-            strcpy(km->if_name[i], p->ifa_name);
-            km->if_ip[i] = ip.sin_addr.s_addr;
-            km->if_mask[i] = mask.sin_addr.s_addr;
+            strncpy(km->iface[i].name, p->ifa_name, 32);
+            km->iface[i].ip = ip.sin_addr.s_addr;
+            km->iface[i].mask = mask.sin_addr.s_addr;
             for(j=0; j<MAX_IF_COUNT; ++j) if(ip.sin_addr.s_addr==k_if_ip(j))
             {
-                km->if_mac_hi[i] = *(WORD*)k_if_hwaddr(j);
-                km->if_mac_lo[i] = *(DWORD*)(k_if_hwaddr(j)+2);
-                km->if_gateway[i] = k_if_gw(j);
-                km->if_dns[i] = k_if_dns(j);
+                km->iface[i].mac_hi = *(WORD*)k_if_hwaddr(j);
+                km->iface[i].mac_lo = *(DWORD*)(k_if_hwaddr(j)+2);
+                km->iface[i].gateway = k_if_gw(j);
+                km->iface[i].dns = k_if_dns(j);
                 break;
             }
         }
@@ -102,7 +102,7 @@ DWORD k_net_info(k_context* ctx, BYTE devNo, BYTE func, DWORD* ebx, DWORD* ecx)
     switch(func)
     {
     case 0: return devNo==0 ? 0 : 1; // type
-    case 1: strcpy(user_mem(*ecx), km->if_name[devNo]); return 0;
+    case 1: strcpy(user_mem(*ecx), km->iface[devNo].name); return 0;
     case 2: return 0; // reset
     case 3: return 0; // stop
     case 6: return 0; // send pck
@@ -148,7 +148,7 @@ DWORD kp_ethernet(k_context* ctx, BYTE devNo, BYTE func, DWORD *ebx)
     KERNEL_MEM* km = kernel_mem(); if(devNo>=km->if_count) return -1;
     switch(func)
     {
-    case 0: *ebx = km->if_mac_hi[devNo]; return km->if_mac_lo[devNo];
+    case 0: *ebx = km->iface[devNo].mac_hi; return km->iface[devNo].mac_lo;
     default: return -1;
     }
 }
@@ -158,14 +158,14 @@ DWORD kp_ipv4(k_context* ctx, BYTE devNo, BYTE func, DWORD ecx)
     KERNEL_MEM* km = kernel_mem(); if(devNo>=km->if_count) return -1;
     switch(func)
     {
-    case 2: return km->if_ip[devNo];
-    case 3: km->if_ip[devNo] = ecx; return 0;
-    case 4: return km->if_dns[devNo];
-    case 5: km->if_dns[devNo] = ecx; return 0;
-    case 6: return km->if_mask[devNo];
-    case 7: km->if_mask[devNo] = ecx; return 0;
-    case 8: return km->if_gateway[devNo];
-    case 9: km->if_gateway[devNo] = ecx; return 0;
+    case 2: return km->iface[devNo].ip;
+    case 3: km->iface[devNo].ip = ecx; return 0;
+    case 4: return km->iface[devNo].dns;
+    case 5: km->iface[devNo].dns = ecx; return 0;
+    case 6: return km->iface[devNo].mask;
+    case 7: km->iface[devNo].mask = ecx; return 0;
+    case 8: return km->iface[devNo].gateway;
+    case 9: km->iface[devNo].gateway = ecx; return 0;
     default: return 0;
     }
 }
