@@ -486,8 +486,13 @@ void k_move_size_window(k_context* ctx, int x, int y, int width, int height)
     if (width==-1) width = ctx->window_w-1;
     if (height==-1) height = ctx->window_h-1;
     ++width; ++height;
-    int minw = skin_params.rmargin+5; if(width<minw) width = minw;
-    int minh = skin_params.height+5; if(height<minh) height = minh;
+    int minw = skin_params.rmargin+5;
+    int minh = skin_params.height+5;
+    if(window_style==4)
+    {
+        if(width<minw) width = minw;
+        if(height<minh) height = minh;
+    }
     if (window_style<=1 || window_style==4)
         k_min_size(ctx, width, height, 1);
     else
