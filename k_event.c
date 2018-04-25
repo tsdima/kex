@@ -14,6 +14,8 @@
 #define g_keys kernel_mem()->keyboard_buffer
 #define g_in_pos kernel_mem()->keyboard_in_pos
 #define g_out_pos kernel_mem()->keyboard_out_pos
+#define g_hotkeys kernel_mem()->hotkey_buffer
+#define g_hot_in_pos kernel_mem()->hotkey_in_pos
 #define g_layout kernel_mem()->keyboard_layout
 #define g_language kernel_mem()->keyboard_language
 #define g_country kernel_mem()->keyboard_country
@@ -47,8 +49,69 @@ void k_event_keypress(k_context* ctx, DWORD key)
     g_keys[g_in_pos++] = key; g_in_pos %= MAX_KEYS;
 }
 
+DWORD k_define_hotkey(k_context* ctx, DWORD def)
+{
+    if(ctx->hotkey_count>=MAX_HOTKEYS) return 1;
+    ctx->hotkey_def[ctx->hotkey_count++] = def;
+    return 0;
+}
+
+DWORD k_remove_hotkey(k_context* ctx, DWORD def)
+{
+    int i;
+    for(i=0; i<ctx->hotkey_count; ++i) if(ctx->hotkey_def[i]==def)
+    {
+        if(i<--ctx->hotkey_count) memmove(ctx->hotkey_def, ctx->hotkey_def+1, sizeof(DWORD)*(ctx->hotkey_count-i));
+        return 0;
+    }
+    return 1;
+}
+
+int k_is_hotkey(DWORD key, DWORD def)
+{
+    static DWORD m1[]={0,1,3,1,2},m2[]={0,2,3,1,2};
+    if((key&0xFF)!=(def&0xFF)) return 0;
+    DWORD i; key>>=8; def>>=8;
+    for(i=0; i<3; ++i,key>>=2,def>>=4)
+    {
+        DWORD m=key&3, z=def&15; if(z>4) z=0;
+        if(m!=m1[z] && m!=m2[z]) return 0;
+    }
+    return 1;
+}
+
+int k_check_hotkey(DWORD scancode)
+{
+    k_context* ctx; int i,is_hot=0; scancode |= (g_modifiers&KMOD_CTRALTSH)<<8;
+    for(ctx = g_slot; ctx<g_slot+MAX_CHILD; ++ctx) if(ctx->tid)
+    {
+        for(i=0; i<ctx->hotkey_count; ++i)
+        {
+            if(k_is_hotkey(scancode, ctx->hotkey_def[i]))
+            {
+                is_hot = 1; ctx->event_pending |= K_EVMASK_KEY;
+                break;
+            }
+        }
+    }
+    if(is_hot)
+    {
+        g_hotkeys[g_hot_in_pos++] = scancode; g_hot_in_pos %= MAX_KEYS;
+    }
+    return is_hot;
+}
+
 DWORD k_get_key(k_context* ctx)
 {
+    if(g_hot_in_pos<MAX_KEYS) while(g_hot_in_pos != ctx->hotkey_out_pos)
+    {
+        DWORD i,key = g_hotkeys[ctx->hotkey_out_pos++]; ctx->hotkey_out_pos %= MAX_KEYS;
+        for(i=0; i<ctx->hotkey_count; ++i) if(k_is_hotkey(key, ctx->hotkey_def[i]))
+        {
+            if (g_hot_in_pos == ctx->hotkey_out_pos && g_in_pos == g_out_pos) ctx->event_pending &= ~K_EVMASK_KEY;
+            return (key<<8)|2;
+        }
+    }
     if (g_in_pos == g_out_pos) return 1;
     DWORD key = g_keys[g_out_pos++]; g_out_pos %= MAX_KEYS;
     if (g_in_pos == g_out_pos) ctx->event_pending &= ~K_EVMASK_KEY;

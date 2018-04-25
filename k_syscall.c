@@ -132,7 +132,6 @@ void k_set_slot_from(DWORD slot, DWORD from)
     ctx->memsize = src->memsize;
     ctx->event_mask = src->event_mask;
     ctx->event_pending = K_EVMASK_REDRAW;
-    ctx->kbd_mode = src->kbd_mode;
     strncpy(ctx->name, src->name, sizeof(ctx->name)-1);
     k_copy_path(ctx->curpath, src->curpath);
     kernel_mem()->shmtc[src->shmid]++;
@@ -561,6 +560,8 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 1: ctx->kbd_mode = *ecx; break;
                 case 2: *eax = ctx->kbd_mode; break;
                 case 3: *eax = k_get_keyboard_modifiers(); break;
+                case 4: *eax = k_define_hotkey(ctx, (*edx<<8)|(*ecx&0xFF)); break;
+                case 5: *eax = k_remove_hotkey(ctx, (*edx<<8)|(*ecx&0xFF)); break;
                 default: err = 1; break;
                 }
                 break;

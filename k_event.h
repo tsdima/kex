@@ -26,6 +26,7 @@
 #define KMOD_RCTRL    8
 #define KMOD_LALT     0x10
 #define KMOD_RALT     0x20
+#define KMOD_CTRALTSH 0x3F
 #define KMOD_CAPSLOCK 0x40
 #define KMOD_NUMLOCK  0x80
 #define KMOD_SCROLL   0x100
@@ -53,9 +54,12 @@ DWORD k_get_mousepos(k_context* ctx, int* x, int* y);
 DWORD k_get_mouse(int* x, int* y);
 DWORD k_get_mousestate(k_context* ctx);
 DWORD k_get_mousewheel(k_context* ctx);
+DWORD k_define_hotkey(k_context* ctx, DWORD def);
+DWORD k_remove_hotkey(k_context* ctx, DWORD def);
 DWORD k_get_key(k_context* ctx);
 DWORD k_get_button(k_context* ctx);
 int k_is_dblclick(k_context* ctx);
+int k_check_hotkey(DWORD scancode);
 
 void k_clear_buttons(k_context* ctx);
 void k_define_button(k_context* ctx, int x, int y, int w, int h, int id);
