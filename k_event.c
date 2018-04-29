@@ -192,9 +192,12 @@ void k_event_mouse(k_context* ctx)
 void k_event_mousemove(k_context* ctx, int x, int y)
 {
     g_mouse_x = x; g_mouse_y = y;
-    ctx->mouse_x = x - ctx->window_x;
-    ctx->mouse_y = y - ctx->window_y;
-    k_event_mouse(ctx);
+    for(ctx = g_slot; ctx<g_slot+MAX_CHILD; ++ctx) if(ctx->tid)
+    {
+        ctx->mouse_x = x - ctx->window_x;
+        ctx->mouse_y = y - ctx->window_y;
+        k_event_mouse(ctx);
+    }
 }
 
 void k_event_mousepress(k_context* ctx, DWORD button, int wheel)
