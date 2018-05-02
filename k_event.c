@@ -108,13 +108,13 @@ DWORD k_get_key(k_context* ctx)
         DWORD i,key = g_hotkeys[ctx->hotkey_out_pos++]; ctx->hotkey_out_pos %= MAX_KEYS;
         for(i=0; i<ctx->hotkey_count; ++i) if(k_is_hotkey(key, ctx->hotkey_def[i]))
         {
-            if (g_hot_in_pos == ctx->hotkey_out_pos && g_in_pos == g_out_pos) ctx->event_pending &= ~K_EVMASK_KEY;
+            if (g_hot_in_pos != ctx->hotkey_out_pos) ctx->event_pending |= K_EVMASK_KEY;
             return (key<<8)|2;
         }
     }
     if (g_in_pos == g_out_pos) return 1;
     DWORD key = g_keys[g_out_pos++]; g_out_pos %= MAX_KEYS;
-    if (g_in_pos == g_out_pos) ctx->event_pending &= ~K_EVMASK_KEY;
+    if (g_in_pos != g_out_pos) ctx->event_pending |= K_EVMASK_KEY;
     return key;
 }
 
