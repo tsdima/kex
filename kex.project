@@ -53,6 +53,7 @@
         <Library Value="Xrender"/>
         <Library Value="rt"/>
         <Library Value="lzma"/>
+        <Library Value="dl"/>
       </Linker>
       <ResourceCompiler Options="" Required="no"/>
       <General OutputFile="$(IntermediateDirectory)/$(ProjectName)" IntermediateDirectory="./Debug" Command="./$(ProjectName)" CommandArguments="&quot;File Managers/KFAR&quot;" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="$(IntermediateDirectory)" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>

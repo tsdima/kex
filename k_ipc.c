@@ -40,7 +40,7 @@ void k_process_ipc_event(k_context* ctx, msg_t* msg)
         read_msg(ipc_server, msg);
         switch(msg->type)
         {
-        case MSGTYPE_REPLY: ctx->retcode = msg->u.reply.retcode; break;
+        case MSGTYPE_REPLY: ctx->retcode = msg->u.reply.retcode; return;
         case MSGTYPE_IPC:
             switch(state)
             {
@@ -107,7 +107,7 @@ void msg_run(msg_t* msg, char* fname, char* args)
 
 void msg_clone(msg_t* msg, DWORD slot, DWORD eip, DWORD esp)
 {
-    msg->len = sizeof(msg->u.clone)+4;
+    msg->len = sizeof(msg_clone_t)+4;
     msg->type = MSGTYPE_CLONE;
     msg->u.clone.slot = slot;
     msg->u.clone.eip = eip;
@@ -116,7 +116,7 @@ void msg_clone(msg_t* msg, DWORD slot, DWORD eip, DWORD esp)
 
 void msg_reply(msg_t* msg, int retcode)
 {
-    msg->len = sizeof(msg->u.reply)+4;
+    msg->len = sizeof(msg_reply_t)+4;
     msg->type = MSGTYPE_REPLY;
     msg->u.reply.retcode = retcode;
 }
@@ -137,7 +137,7 @@ void msg_ipc(msg_t* msg, DWORD slot, DWORD code, DWORD len, BYTE* data)
 
 void msg_ipc_event(msg_t* msg, DWORD slot, DWORD type, DWORD param)
 {
-    msg->len = sizeof(msg->u.ipc_event)+4;
+    msg->len = sizeof(msg_ipc_event_t)+4;
     msg->type = MSGTYPE_IPC;
     msg->u.ipc_event.to_slot = slot;
     msg->u.ipc_event.code = IPCCODE_EVENT;
@@ -147,7 +147,7 @@ void msg_ipc_event(msg_t* msg, DWORD slot, DWORD type, DWORD param)
 
 void msg_focus_in(msg_t* msg, DWORD slot)
 {
-    msg->len = sizeof(msg->u.focus)+4;
+    msg->len = sizeof(msg_focus_t)+4;
     msg->type = MSGTYPE_GOT_FOCUS;
     msg->u.focus.slot = slot;
 }
@@ -161,6 +161,26 @@ void msg_load_skin(msg_t* msg, char* fname)
         msg->len += strlen(fname)+3;
         strcpy(msg->u.run.buf, fname);
     }
+}
+
+void msg_driver_load(msg_t* msg, char* name)
+{
+    msg->len = strlen(name)+7;
+    msg->type = MSGTYPE_DRV_LOAD;
+    strcpy(msg->u.run.buf, name);
+}
+
+void msg_driver_ioctl(msg_t* msg, DWORD shmid, DWORD* args)
+{
+    msg->len = sizeof(msg_ioctl_t)+4;
+    msg->type = MSGTYPE_DRV_IOCTL;
+    msg->u.ioctl.shmid = shmid;
+    msg->u.ioctl.handle = args[0];
+    msg->u.ioctl.code = args[1];
+    msg->u.ioctl.iaddr = args[2];
+    msg->u.ioctl.ilen = args[3];
+    msg->u.ioctl.oaddr = args[4];
+    msg->u.ioctl.olen = args[5];
 }
 
 void k_focus_in(k_context* ctx)

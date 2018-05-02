@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -149,6 +150,54 @@ void do_load_skin(msg_t* msg)
     for(i=1; i<MAX_CHILD && fdlist[i]; ++i) if(fdlist[i]>0) write_msg(fdlist[i], msg);
 }
 
+void do_driver_load(msg_t* msg, int fd)
+{
+    DWORD i; KERNEL_MEM* km = kernel_mem(); char* name = msg->u.run.buf;
+    for(i=0; i<MAX_DRIVER && strncasecmp(name, km->driver[i].name, 16)!=0; ++i);
+    if(i>=MAX_DRIVER)
+    {
+        char path[2048]; strcpy(path, k_root); path[strlen(path)-5] = 0;
+        strcat(path, name); strcat(path, ".so");
+        k_check_exists(path);
+        if(access(path,F_OK)==0)
+        {
+            void* hDrv = dlopen(path, RTLD_NOW);
+            if(hDrv!=NULL)
+            {
+                void* ioctl = dlsym(hDrv, "k_ioctl");
+                if(ioctl!=NULL)
+                {
+                    for(i=0; i<MAX_DRIVER && km->driver[i].name[0]; ++i);
+                    if(i<MAX_DRIVER)
+                    {
+                        strncpy(km->driver[i].name, name, 16);
+                        km->driver[i].ioctl = ioctl;
+                    }
+                }
+            }
+        }
+    }
+    msg_reply(msg, i<MAX_DRIVER?i+1:0);
+    write_msg(fd, msg);
+}
+
+void do_driver_ioctl(msg_t* msg, int fd)
+{
+    DWORD ret=-1,i=msg->u.ioctl.handle-1; KERNEL_MEM* km = kernel_mem();
+    if(i<MAX_DRIVER && km->driver[i].name[0]!=0)
+    {
+        DWORD size; BYTE* ptr = k_mem_open_app(msg->u.ioctl.shmid, &size);
+        if(ptr!=NULL)
+        {
+            ret = km->driver[i].ioctl(msg->u.ioctl.code, ptr+msg->u.ioctl.iaddr,
+                msg->u.ioctl.ilen, ptr+msg->u.ioctl.oaddr, msg->u.ioctl.olen);
+            k_mem_close_app(ptr, size);
+        }
+    }
+    msg_reply(msg, ret);
+    write_msg(fd, msg);
+}
+
 int main(int argc, char **argv)
 {
     if(argc<2)
@@ -214,6 +263,8 @@ int main(int argc, char **argv)
                     case MSGTYPE_IPC: do_ipc_msg(&msg, i); break;
                     case MSGTYPE_GOT_FOCUS: do_focus(&msg); break;
                     case MSGTYPE_LOAD_SKIN: do_load_skin(&msg); break;
+                    case MSGTYPE_DRV_LOAD: do_driver_load(&msg, fd); break;
+                    case MSGTYPE_DRV_IOCTL: do_driver_ioctl(&msg, fd); break;
                     }
                 }
                 else if(i>0)

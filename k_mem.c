@@ -163,6 +163,17 @@ void k_mem_init(int shmid)
     k_tls_base = (BYTE*)mmap(TLS_BASE, TLS_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, 0, 0);
 }
 
+BYTE* k_mem_open_app(int shmid, DWORD* psize)
+{
+    void* ptr = k_shmem_open(APP_SHMEM, shmid, KEX_BASE, 0, 0, psize);
+    return ptr==MAP_FAILED ? NULL : ptr;
+}
+
+void k_mem_close_app(void* ptr, DWORD size)
+{
+    munmap(ptr, size);
+}
+
 void k_mem_done(int shmid)
 {
     k_shmem_unlink(APP_SHMEM, shmid);

@@ -10,6 +10,7 @@ typedef unsigned long long QWORD;
 #define MAX_KEYS 120
 #define MAX_HOTKEYS 64
 #define MAX_USM 16
+#define MAX_DRIVER 16
 #define MAX_SOCKET 32
 #define MAX_IFACE 8
 #define DEBUG_BOARD_LEN 4096
@@ -75,6 +76,12 @@ typedef struct
 
 typedef struct
 {
+    char name[16];
+    DWORD (*ioctl)(DWORD code, void* idata, DWORD ilen, void* odata, DWORD olen);
+} k_driver;
+
+typedef struct
+{
     char  name[32];
     DWORD mac_lo;
     DWORD mac_hi;
@@ -109,6 +116,7 @@ typedef struct
     int shmtc[MAX_CHILD];
     k_context slot[MAX_CHILD];
     k_user_shm usm[MAX_USM];
+    k_driver driver[MAX_DRIVER];
     char extfs_key[64];
     char extfs_path[64];
     DWORD if_count;
@@ -167,3 +175,6 @@ DWORD k_stub_jmp(DWORD eip, DWORD esp);
 void k_save_fsbase();
 void k_load_fsbase();
 void k_set_fsbase();
+
+BYTE* k_mem_open_app(int shmid, DWORD* psize);
+void k_mem_close_app(void* ptr, DWORD size);

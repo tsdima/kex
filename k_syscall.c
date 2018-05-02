@@ -188,7 +188,7 @@ DWORD k_new_thread(k_context* ctx, DWORD slot, DWORD eip, DWORD esp)
     msg_t msg;
     msg_clone(&msg, slot, eip, esp);
     write_msg(ipc_server, &msg);
-    for(ctx->retcode = 0; ctx->retcode==0;) k_process_ipc_event(ctx, &msg);
+    do k_process_ipc_event(ctx, &msg); while(msg.type!=MSGTYPE_REPLY);
     return ctx->retcode;
 }
 
@@ -222,6 +222,22 @@ DWORD k_send_event(DWORD type, DWORD param)
     msg_t msg; msg_ipc_event(&msg, kernel_mem()->active_slot, type, param);
     write_msg(ipc_server, &msg);
     return 0;
+}
+
+DWORD k_driver_load(k_context* ctx, char* name)
+{
+    msg_t msg; msg_driver_load(&msg, name);
+    write_msg(ipc_server, &msg);
+    do k_process_ipc_event(ctx, &msg); while(msg.type!=MSGTYPE_REPLY);
+    return ctx->retcode;
+}
+
+DWORD k_driver_ioctl(k_context* ctx, DWORD* args)
+{
+    msg_t msg; msg_driver_ioctl(&msg, ctx->shmid, args);
+    write_msg(ipc_server, &msg);
+    do k_process_ipc_event(ctx, &msg); while(msg.type!=MSGTYPE_REPLY);
+    return ctx->retcode;
 }
 
 int futex(int* uaddr, int op, int val, const struct timespec* timeout, int* uaddr2, int val3)
@@ -575,6 +591,8 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 11: *eax = k_heap_init(); break;
                 case 12: *eax = k_heap_alloc(*ecx); break;
                 case 13: *eax = k_heap_free(*ecx); break;
+                case 16: *eax = k_driver_load(ctx, user_mem(*ecx)); break;
+                case 17: *eax = k_driver_ioctl(ctx, user_pd(*ecx)); break;
                 case 18: *eax = k_load_dll(ctx, user_pb(*ecx), *edx); break;
                 case 19: *eax = k_load_dll(ctx, user_pb(*ecx), 0); break;
                 case 20: *eax = k_heap_realloc(*edx, *ecx); break;

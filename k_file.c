@@ -315,7 +315,7 @@ DWORD k_run_app(k_context* ctx, char* fname, char* args)
     if(strncmp(k_root, fname, len)==0) fname += len-1;
     msg_run(&msg, fname, args);
     write_msg(ipc_server, &msg);
-    for(ctx->retcode = 0; ctx->retcode==0;) k_process_ipc_event(ctx, &msg);
+    do k_process_ipc_event(ctx, &msg); while(msg.type!=MSGTYPE_REPLY);
     return ctx->retcode;
 }
 
