@@ -305,7 +305,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
 #ifdef __x86_64__
     k_load_fsbase();
 #endif
-    greg_t* gregs = ((struct ucontext*)extra)->uc_mcontext.gregs; DWORD slot = k_get_slot();
+    greg_t* gregs = ((struct ucontext_t*)extra)->uc_mcontext.gregs; DWORD slot = k_get_slot();
     DWORD* eax = (DWORD*)&R_AX;
     DWORD* ebx = (DWORD*)&R_BX;
     DWORD* ecx = (DWORD*)&R_CX;
@@ -691,7 +691,7 @@ void k_syscall_init()
     k_save_fsbase();
 #endif
 
-    struct sigaltstack altstack;
+    stack_t altstack;
     struct sigaction sigsegv_action;
 
     altstack.ss_sp = malloc(stack_size);
