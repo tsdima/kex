@@ -305,7 +305,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
 #ifdef __x86_64__
     k_load_fsbase();
 #endif
-    greg_t* gregs = ((struct ucontext_t*)extra)->uc_mcontext.gregs; DWORD slot = k_get_slot();
+    greg_t* gregs = ((ucontext_t*)extra)->uc_mcontext.gregs; DWORD slot = k_get_slot();
     DWORD* eax = (DWORD*)&R_AX;
     DWORD* ebx = (DWORD*)&R_BX;
     DWORD* ecx = (DWORD*)&R_CX;
