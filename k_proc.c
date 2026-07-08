@@ -252,7 +252,7 @@ void k_start_thread(DWORD eip, DWORD esp)
         "mov %%ax, %%es\n"
         "mov %%ax, %%ss\n"
         "push %0\n"
-        "lret\n" : :
+        "lretl\n" : :
         "r" (k_stub_jmp(eip, esp)+0xf00000000) : "ax"
     );
 #else

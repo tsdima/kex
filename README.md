@@ -6,23 +6,19 @@ This project lets you to run [Kolibri OS][1] programs on your Linux host without
 How to build
 ----
 
-Install the build essential environment and LZMA library.
+Install the build essential environment, LZMA and PulseAudio development libraries.
 
 Ubuntu:
 
-    sudo apt-get install ubuntu build-essential liblzma-dev
+    sudo apt-get install build-essential liblzma-dev libpulse-dev
 
 Fedora:
 
-    sudo yum install liblzma-devel
-
-or
-
-    sudo yum install lzma-sdk457
+    sudo yum install liblzma-devel pulseaudio-libs-devel
 
 Then use your gcc to build `kex` by entering the following command at your terminal window:
 
-    gcc -o kex main.c k_*.c -lX11 -lXrender -lrt -llzma -ldl -D_GNU_SOURCE
+    gcc -o kex main.c k_*.c -lX11 -lXrender -lrt -llzma -ldl -lpulse-simple -lpulse -lpthread -D_GNU_SOURCE
 
 Alternatively, if you have [CodeLite][2] you could simply add the project file into your existing (or new empty) workspace and build it
 
