@@ -3,8 +3,11 @@
 #include "k_net.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <ifaddrs.h>
@@ -64,6 +67,33 @@ int k_nmcli_call(const char* cmd)
 
 k_timespec k_net_update_timeout;
 
+static int k_net_debug(void)
+{
+    static int cached = -1;
+    if(cached < 0) { const char* e = getenv("KEX_NET_DEBUG"); cached = (e && *e && *e!='0'); }
+    return cached;
+}
+#define NET_DBG(...) do { if(k_net_debug()) fprintf(stderr, __VA_ARGS__); } while(0)
+
+// Return the first nameserver IP from /etc/resolv.conf, in network byte order,
+// or 0 if none is listed. 127.0.0.53 (systemd-resolved) is a valid DNS.
+DWORD k_read_resolv_conf_dns()
+{
+    FILE* fp = fopen("/etc/resolv.conf", "r"); if(!fp) return 0;
+    char line[256]; DWORD ip = 0;
+    while(fgets(line, sizeof(line), fp))
+    {
+        int a,b,c,d;
+        if(sscanf(line, " nameserver %d.%d.%d.%d", &a,&b,&c,&d)==4)
+        {
+            ip = a | (b<<8) | (c<<16) | (d<<24);
+            break;
+        }
+    }
+    fclose(fp);
+    return ip;
+}
+
 void k_net_update()
 {
     k_timespec now; k_time_get(&now);
@@ -92,6 +122,22 @@ void k_net_update()
             }
         }
         if(ifap) freeifaddrs(ifap);
+
+        // Pick a default DNS: prefer a value already discovered on any
+        // interface (nmcli), fall back to /etc/resolv.conf, finally 8.8.8.8.
+        // Apps that query devno=0 (loopback) or a device without DNS still
+        // need an answer.
+        DWORD def_dns = 0, i;
+        for(i=0; i<km->if_count; ++i) if(km->iface[i].dns!=0) { def_dns = km->iface[i].dns; break; }
+        if(def_dns==0) def_dns = k_read_resolv_conf_dns();
+        if(def_dns==0) def_dns = 8 | (8<<8) | (8<<16) | (8<<24); // 8.8.8.8
+        for(i=0; i<km->if_count; ++i) if(km->iface[i].dns==0) km->iface[i].dns = def_dns;
+
+        for(i=0; i<km->if_count; ++i) NET_DBG(
+            "kex net: iface[%u] name=%s ip=%u.%u.%u.%u dns=%u.%u.%u.%u\n",
+            i, km->iface[i].name,
+            km->iface[i].ip&0xFF, (km->iface[i].ip>>8)&0xFF, (km->iface[i].ip>>16)&0xFF, (km->iface[i].ip>>24)&0xFF,
+            km->iface[i].dns&0xFF, (km->iface[i].dns>>8)&0xFF, (km->iface[i].dns>>16)&0xFF, (km->iface[i].dns>>24)&0xFF);
     }
 }
 
@@ -131,10 +177,51 @@ DWORD k_net_socket(k_context* ctx, BYTE func, DWORD* ebx, DWORD ecx, DWORD edx, 
     case 1: ret = close(ecx); ks_replace_socket(ctx, ecx, 0); break;
     case 2: ret = bind(ecx, user_mem(edx), esi); break;
     case 3: ret = listen(ecx, 5); break;
-    case 4: ret = connect(ecx, user_mem(edx), esi); break;
+    case 4: {
+        struct sockaddr_in* sa = user_mem(edx);
+        NET_DBG("kex net: connect fd=%u len=%u family=%u port=%u ip=%u.%u.%u.%u\n",
+            ecx, esi, sa->sin_family, ntohs(sa->sin_port),
+            ((BYTE*)&sa->sin_addr)[0], ((BYTE*)&sa->sin_addr)[1],
+            ((BYTE*)&sa->sin_addr)[2], ((BYTE*)&sa->sin_addr)[3]);
+        ret = connect(ecx, user_mem(edx), esi);
+        if(ret==-1) NET_DBG("kex net: connect errno=%d (%s)\n", errno, strerror(errno));
+        break;
+    }
     case 5: ret = accept(ecx, user_mem(edx), &esi); break;
-    case 6: ret = send(ecx, user_mem(edx), esi, edi); break;
-    case 7: ret = recv(ecx, user_mem(edx), esi, edi); if(ret==-1 && (edi&MSG_DONTWAIT)!=0) err=6; break;
+    case 6: {
+        BYTE* buf = user_mem(edx);
+        ret = send(ecx, buf, esi, edi);
+        NET_DBG("kex net: send fd=%u len=%u -> %d%s%s\n", ecx, esi, (int)ret,
+            ret==-1?" errno=":"", ret==-1?strerror(errno):"");
+        if(esi>=12 && esi<=512) {
+            // Try to decode DNS query name from question section
+            char host[256]; int hp=0, i=12, lbl;
+            while(i<(int)esi && (lbl=buf[i])!=0 && hp<250) {
+                if(lbl>63 || i+1+lbl>(int)esi) { hp=0; break; }
+                if(hp) host[hp++]='.';
+                memcpy(host+hp, buf+i+1, lbl); hp+=lbl; i+=1+lbl;
+            }
+            host[hp]=0;
+            if(hp>0) NET_DBG("kex net: dns query='%s' rd=%u\n", host, buf[2]&1);
+        }
+        break;
+    }
+    case 7: {
+        BYTE* buf = user_mem(edx);
+        ret = recv(ecx, buf, esi, edi);
+        NET_DBG("kex net: recv fd=%u buflen=%u -> %d%s%s\n", ecx, esi, (int)ret,
+            ret==-1?" errno=":"", ret==-1?strerror(errno):"");
+        if(ret>=12 && ret<=512 && esi<=512) {
+            // DNS reply: decode RCODE and answer count
+            int rcode = buf[3]&0xF;
+            int ancount = (buf[6]<<8) | buf[7];
+            const char* rc_name = rcode==0?"NOERROR":rcode==1?"FORMERR":rcode==2?"SERVFAIL":
+                rcode==3?"NXDOMAIN":rcode==4?"NOTIMP":rcode==5?"REFUSED":"?";
+            NET_DBG("kex net: dns reply rcode=%d(%s) ancount=%d\n", rcode, rc_name, ancount);
+        }
+        if(ret==-1 && (edi&MSG_DONTWAIT)!=0) err=6;
+        break;
+    }
     case 8: p = user_pd(edx); ret = getsockopt(ecx, p[0], p[1], p+3, p+2); break;
     case 9: p = user_pd(edx); ret = setsockopt(ecx, p[0], p[1], p+3, p[2]); break;
     case 10: ret = socketpair(AF_LOCAL, SOCK_STREAM, 0, pair); if(ret!=-1) { ret = pair[0]; *ebx = pair[1]; } break;
@@ -155,12 +242,23 @@ DWORD kp_ethernet(k_context* ctx, BYTE devNo, BYTE func, DWORD *ebx)
 
 DWORD kp_ipv4(k_context* ctx, BYTE devNo, BYTE func, DWORD ecx)
 {
-    KERNEL_MEM* km = kernel_mem(); if(devNo>=km->if_count) return -1;
+    KERNEL_MEM* km = kernel_mem();
+    if(func==4)
+    {
+        // "Get DNS" — return a usable value regardless of devNo. Kolibri apps
+        // sometimes pass devNo=0 (loopback) or a devNo that doesn't have DNS
+        // populated (VPN/docker). Search every interface for a valid DNS.
+        DWORD i, dns = devNo<km->if_count ? km->iface[devNo].dns : 0;
+        if(dns==0) for(i=0; i<km->if_count; ++i) if(km->iface[i].dns) { dns = km->iface[i].dns; break; }
+        NET_DBG("kex net: get_dns devno=%u -> %u.%u.%u.%u\n",
+            devNo, dns&0xFF, (dns>>8)&0xFF, (dns>>16)&0xFF, (dns>>24)&0xFF);
+        return dns;
+    }
+    if(devNo>=km->if_count) return -1;
     switch(func)
     {
     case 2: return km->iface[devNo].ip;
     case 3: km->iface[devNo].ip = ecx; return 0;
-    case 4: return km->iface[devNo].dns;
     case 5: km->iface[devNo].dns = ecx; return 0;
     case 6: return km->iface[devNo].mask;
     case 7: km->iface[devNo].mask = ecx; return 0;

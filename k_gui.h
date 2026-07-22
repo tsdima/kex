@@ -82,6 +82,7 @@ void k_move_mouse(int x, int y);
 void k_move_window(k_context* ctx, int x, int y);
 void k_move_size_window(k_context* ctx, int x, int y, int width, int height);
 void k_raise_window(k_context* ctx);
+void k_minimize_window(k_context* ctx);
 void k_window(k_context* ctx, int x, int y, DWORD width, DWORD height, DWORD color, DWORD titleaddr);
 void k_set_title(k_context* ctx, DWORD titleaddr, int cp);
 void k_draw_pixel(k_context* ctx, int x, int y, DWORD color);

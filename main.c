@@ -3,12 +3,14 @@
 #include "k_iconv.h"
 #include "k_gui.h"
 #include "k_syscall.h"
+#include "k_sound.h"
 #include "k_proc.h"
 #include "k_file.h"
 #include "k_ipc.h"
 
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <dlfcn.h>
@@ -81,6 +83,7 @@ void do_run(msg_t* msg, int fd)
                 k_mem_init(shmid);
                 k_gui_init();
                 k_syscall_init();
+                k_sound_init();
                 k_set_skin(k_skin_open());
                 k_set_slot(newslot, shmid, msg->u.run.buf);
                 if(fd>0) write_msg(fd, &rply);
@@ -92,6 +95,7 @@ void do_run(msg_t* msg, int fd)
                 k_mem_reopen();
                 k_gui_init();
                 k_syscall_init();
+                k_sound_init();
                 k_set_skin(k_skin_open());
                 k_set_slot_from(newslot, msg->u.clone.slot);
                 if(fd>0) write_msg(fd, &rply);
@@ -156,22 +160,39 @@ void do_driver_load(msg_t* msg, int fd)
     for(i=0; i<MAX_DRIVER && strncasecmp(name, km->driver[i].name, 16)!=0; ++i);
     if(i>=MAX_DRIVER)
     {
-        char path[2048]; strcpy(path, k_root); path[strlen(path)-5] = 0;
-        strcat(path, name); strcat(path, ".so");
-        k_check_exists(path);
-        if(access(path,F_OK)==0)
+        // Built-in audio drivers: no .so needed.
+        void* builtin_ioctl = NULL;
+        if(strcasecmp(name, "INFINITY")==0) builtin_ioctl = (void*)k_infinity_ioctl;
+        else if(strcasecmp(name, "SOUND")==0) builtin_ioctl = (void*)k_sound_ioctl;
+
+        if(builtin_ioctl)
         {
-            void* hDrv = dlopen(path, RTLD_NOW);
-            if(hDrv!=NULL)
+            for(i=0; i<MAX_DRIVER && km->driver[i].name[0]; ++i);
+            if(i<MAX_DRIVER)
             {
-                void* ioctl = dlsym(hDrv, "k_ioctl");
-                if(ioctl!=NULL)
+                strncpy(km->driver[i].name, name, 16);
+                km->driver[i].ioctl = builtin_ioctl;
+            }
+        }
+        else
+        {
+            char path[2048]; strcpy(path, k_root); path[strlen(path)-5] = 0;
+            strcat(path, name); strcat(path, ".so");
+            k_check_exists(path);
+            if(access(path,F_OK)==0)
+            {
+                void* hDrv = dlopen(path, RTLD_NOW);
+                if(hDrv!=NULL)
                 {
-                    for(i=0; i<MAX_DRIVER && km->driver[i].name[0]; ++i);
-                    if(i<MAX_DRIVER)
+                    void* ioctl = dlsym(hDrv, "k_ioctl");
+                    if(ioctl!=NULL)
                     {
-                        strncpy(km->driver[i].name, name, 16);
-                        km->driver[i].ioctl = ioctl;
+                        for(i=0; i<MAX_DRIVER && km->driver[i].name[0]; ++i);
+                        if(i<MAX_DRIVER)
+                        {
+                            strncpy(km->driver[i].name, name, 16);
+                            km->driver[i].ioctl = ioctl;
+                        }
                     }
                 }
             }
@@ -189,8 +210,16 @@ void do_driver_ioctl(msg_t* msg, int fd)
         DWORD size; BYTE* ptr = k_mem_open_app(msg->u.ioctl.shmid, &size);
         if(ptr!=NULL)
         {
-            ret = km->driver[i].ioctl(msg->u.ioctl.code, ptr+msg->u.ioctl.iaddr,
-                msg->u.ioctl.ilen, ptr+msg->u.ioctl.oaddr, msg->u.ioctl.olen);
+            DWORD code = msg->u.ioctl.code;
+            DWORD* args = (DWORD*)(ptr + msg->u.ioctl.iaddr);
+
+            // INFINITY SND_OUT/SND_SETBUFF carry a Kolibri VA (`src`) inside
+            // the input struct — feed those directly from app memory.
+            if(strcasecmp(km->driver[i].name, "INFINITY")==0 && (code==8 || code==9))
+                ret = k_infinity_feed(code, ptr, size, args);
+            else
+                ret = km->driver[i].ioctl(code, ptr+msg->u.ioctl.iaddr, msg->u.ioctl.ilen,
+                    ptr+msg->u.ioctl.oaddr, msg->u.ioctl.olen);
             k_mem_close_app(ptr, size);
         }
     }

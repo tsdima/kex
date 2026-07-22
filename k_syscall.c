@@ -6,6 +6,7 @@
 #include "k_file.h"
 #include "k_ipc.h"
 #include "k_net.h"
+#include "k_sound.h"
 #include "k_syscall.h"
 
 #include <stdio.h>
@@ -14,6 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sched.h>
 #include <signal.h>
 #include <sys/ucontext.h>
 #include <sys/syscall.h>
@@ -400,6 +402,16 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 4: *eax = 1<<30; break; // CPU idle clocks
                 case 5: *eax = 1<<30; break; // CPU clock
                 case 7: *eax = km->active_slot; break;
+                case 9: exit(0); break; // shutdown/reboot -> just exit kex
+                case 10: k_minimize_window(ctx); break;
+                case 13: {
+                    BYTE* p = user_pb(*ecx);
+                    memset(p, 0, 16);
+                    p[0]=0; p[1]=7; p[2]=7; p[3]=0;                  // 0.7.7.0
+                    *(DWORD*)(p+5) = 8930;                           // revision
+                    *eax = 0;
+                    break;
+                }
                 case 14: *eax = 0; break; // TODO: wait VRTC
                 case 16: *eax = 1<<19; break; // RAM size free KB
                 case 17: *eax = 1<<20; break; // RAM size total KB
@@ -425,6 +437,11 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 12: *eax = 0; km->pci_enabled = *ecx; break;
                 default: err = 1; break;
                 }
+                break;
+            case 22:
+                // Kolibri returns: 0 ok, 1 bad data, 2 CMOS batteries dead.
+                // kex has no permission to set host time -> report 2.
+                *eax = 2;
                 break;
             case 23:
                 k_time_get(&timeout);
@@ -503,6 +520,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 4: *eax = k_get_skin_height(); break;
                 case 5: k_get_desktop_rect(&x,&y,eax,ebx); *eax |= x<<16; *ebx |= y<<16; break;
                 case 6: k_set_desktop_rect(*ecx>>16, *edx>>16, *ecx&0xFFFF, *edx&0xFFFF); break;
+                case 7: strcpy((char*)user_pb(*ecx), "/sys/DEFAULT.SKN"); break;
                 case 8: *eax = k_load_skin(ctx, user_pb(*ecx)); break;
                 default: err = 1; break;
                 }
@@ -513,6 +531,12 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 case 1: *eax = k_new_thread(ctx, slot, *ecx, *edx); break;
                 default: err = 1; break;
                 }
+                break;
+            case 55:
+                // fn 55.55: play a melody on the PC speaker. kex synthesizes
+                // a square wave and pipes it to PulseAudio.
+                if (*ebx == 55) *eax = k_speaker_play(user_pb(*esi));
+                else err = 1;
                 break;
             case 54:
                 switch(*ebx)
@@ -538,6 +562,8 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
                 switch(*ebx)
                 {
                 case 1: k_get_screen_size(&x,&y); *eax=(x<<16)+y; break;
+                case 2: *eax = 32; break; // bits per pixel of framebuffer
+                case 3: k_get_screen_size(&x,&y); *eax = x*4; break; // bytes per scanline
                 default: err = 1; break;
                 }
                 break;
@@ -587,6 +613,7 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
             case 68:
                 switch(*ebx)
                 {
+                case 0: sched_yield(); break;
                 case 1: usleep(1); break;
                 case 11: *eax = k_heap_init(); break;
                 case 12: *eax = k_heap_alloc(*ecx); break;

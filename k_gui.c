@@ -538,6 +538,13 @@ void k_raise_window(k_context* ctx)
     XMapRaised(display, win);
 }
 
+void k_minimize_window(k_context* ctx)
+{
+    if (win==0) return;
+    XIconifyWindow(display, win, 0);
+    ctx->window_state |= 2;
+}
+
 DWORD k_get_pixel(k_context* ctx, int x, int y)
 {
     XImage* xim = XGetImage(display, RootWindow(display, 0), x, y, 1, 1, AllPlanes, XYPixmap);
