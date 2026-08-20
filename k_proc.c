@@ -159,6 +159,12 @@ void* k_load(k_context* ctx, BYTE* name, int cp, void*(*_mem_alloc)(DWORD), DWOR
         if(psize) *psize = size;
         if(0x14C == *(WORD*)&hdr)
         {
+            if(!unpacked)
+            {
+                unpacked = (BYTE*)malloc(flen);
+                fseek(fp, 0, SEEK_SET);
+                if (fread(unpacked, 1, flen, fp) != flen) { fclose(fp); return 0; }
+            }
             size = coff_parse((COFF_HEADER*)unpacked, NULL, NULL);
             if(size==0||size>=0x1000000) k_panic("coff error");
             mem = _mem_alloc(size);
