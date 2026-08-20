@@ -1,4 +1,5 @@
 #include "k_mem.h"
+#include "k_clip.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -506,13 +507,23 @@ void k_skin_close()
     munmap(k_skin_data, k_skin_size); k_skin_data = NULL;
 }
 
-DWORD k_clipboard_add(DWORD size, DWORD addr)
+/* Add a slot from a host buffer (used by the X11 clipboard bridge). */
+DWORD k_clipboard_add_host(DWORD size, const void* data)
 {
     DWORD* ptr = k_shmem_open(CLIPBOARD_SHMEM, k_kernel_mem->clipboard_count++, CLIPBOARD_BASE, size, 0, NULL);
     if(ptr == MAP_FAILED) return 1;
-    memcpy(ptr, user_pd(addr), size); *ptr = size;
+    memcpy(ptr, data, size); *ptr = size;
     munmap(ptr, size);
     return 0;
+}
+
+DWORD k_clipboard_add(DWORD size, DWORD addr)
+{
+    DWORD res = k_clipboard_add_host(size, user_pd(addr));
+    /* Mirror the copy onto the X CLIPBOARD selection so host applications
+     * can paste it. */
+    if(res == 0) k_clip_publish(user_pd(addr), size);
+    return res;
 }
 
 DWORD k_clipboard_get(DWORD id)

@@ -1,4 +1,5 @@
 #include "k_mem.h"
+#include "k_clip.h"
 #include "k_event.h"
 #include "k_iconv.h"
 #include "k_proc.h"
@@ -541,7 +542,8 @@ void OnSigSegv(int sig, siginfo_t* info, void* extra)
             case 54:
                 switch(*ebx)
                 {
-                case 0: *eax = km->clipboard_count; break;
+                /* Pull in a host copy first, so KolibriOS apps see it as a slot. */
+                case 0: k_clip_sync(); *eax = km->clipboard_count; break;
                 case 1: *eax = k_clipboard_get(*ecx); break;
                 case 2: *eax = k_clipboard_add(*ecx, *edx); break;
                 case 3: *eax = k_clipboard_remove_last(); break;

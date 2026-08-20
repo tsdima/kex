@@ -166,6 +166,7 @@ BYTE* k_skin_open();
 void  k_skin_close();
 
 DWORD k_clipboard_add(DWORD size, DWORD addr);
+DWORD k_clipboard_add_host(DWORD size, const void* data);
 DWORD k_clipboard_get(DWORD id);
 DWORD k_clipboard_remove_last();
 

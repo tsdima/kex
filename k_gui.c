@@ -4,6 +4,7 @@
 #include "k_file.h"
 #include "k_ipc.h"
 #include "k_gui.h"
+#include "k_clip.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -685,6 +686,11 @@ void k_process_event(k_context* ctx)
 
         switch(ev.type)
         {
+        case SelectionRequest:
+        case SelectionClear:
+            k_clip_event(&ev);
+            break;
+
         case Expose:
             k_draw_window_intern(ctx,1);
             k_event_redraw(ctx);
